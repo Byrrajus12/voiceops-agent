@@ -1,0 +1,12 @@
+.env
+sa-key.json
+.git
+.claude
+__pycache__
+*.pyc
+target-service
+approval-server
+demo
+workflows
+*.md
+docker-compose.yml
