@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from google.adk.agents import Agent  # noqa: E402
-from google.adk.tools.mcp_tool.mcp_toolset import McpToolset, StdioConnectionParams, StdioServerParameters  # noqa: E402
+from google.adk.tools.mcp_tool.mcp_toolset import McpToolset, StreamableHTTPConnectionParams  # noqa: E402
 
 from agent.tools import (  # noqa: E402
     generate_voice_briefing,
@@ -17,32 +17,27 @@ from agent.tools import (  # noqa: E402
 )
 
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+_APPROVAL_SERVER_URL = os.getenv("APPROVAL_SERVER_URL", "http://localhost:8080")
 
-# Dynatrace MCP server — uses apps.dynatrace.com (Platform API) with dt0s16 platform token.
+# Dynatrace MCP Gateway — hosted remote endpoint using Streamable HTTP transport.
 # Required token scopes: storage:problems:read, storage:events:read, storage:logs:read,
 #   davis:problems:read, document:read, environment-api:events:write
-_dt_env = os.getenv("DT_ENVIRONMENT", f"https://{os.getenv('DYNATRACE_TENANT', 'pmn17776.apps.dynatrace.com')}")
-if not _dt_env.startswith("http"):
-    _dt_env = f"https://{_dt_env}"
+_MCP_GATEWAY_URL = "https://pmn17776.apps.dynatrace.com/platform-reserved/mcp-gateway/v0.1/servers/dynatrace-mcp/mcp"
 
 dynatrace_mcp = McpToolset(
-    connection_params=StdioConnectionParams(
-        server_params=StdioServerParameters(
-            command="npx",
-            args=["-y", "@dynatrace-oss/dynatrace-mcp-server@latest"],
-            env={
-                "DT_ENVIRONMENT": _dt_env,
-                "DT_PLATFORM_TOKEN": os.getenv("DYNATRACE_PLATFORM_TOKEN", ""),
-            },
-        ),
-        timeout=30.0,
+    connection_params=StreamableHTTPConnectionParams(
+        url=_MCP_GATEWAY_URL,
+        headers={
+            "Authorization": f"Bearer {os.getenv('DYNATRACE_PLATFORM_TOKEN', '')}",
+        },
     ),
     tool_filter=[
-        "list_problems",
-        "execute_dql",
-        "send_event",
-        "generate_dql_from_natural_language",
-        "find_entity_by_name",
+        "query-problems",
+        "get-problem-by-id",
+        "execute-dql",
+        "create-dql",
+        "get-entity-name",
+        "get-entity-id",
     ],
 )
 
@@ -55,20 +50,21 @@ root_agent = Agent(
         "generates a Google Cloud TTS voice briefing, gates remediation on human approval, "
         "and triggers a GitHub Actions rollback — all in one autonomous loop."
     ),
-    instruction="""You are VoiceOps — an Autonomous Incident Commander. You have access to the
-Dynatrace MCP server (list_problems, execute_dql, send_event, generate_dql_from_natural_language,
-find_entity_by_name) plus tools for GitHub, Google TTS, human approval, and rollback execution.
+    instruction=f"""You are VoiceOps — an Autonomous Incident Commander. You have access to the
+Dynatrace MCP server (query-problems, get-problem-by-id, execute-dql, create-dql, get-entity-name,
+get-entity-id) plus tools for GitHub, Google TTS, human approval, and rollback execution.
 
 ## Step 1 — DETECT
-Call list_problems to get open Dynatrace Davis AI problems.
+Call query-problems to get open Dynatrace Davis AI problems.
 - If no problems: respond "All clear — Dynatrace Davis AI reports no open incidents." and stop.
 - If problems exist: pick the highest-severity one. Note its id, title, severity, and startTime.
+  Use get-problem-by-id to fetch full details on the top problem.
 
 ## Step 2 — CORRELATE
 Call get_recent_github_commits (limit=15).
 Find the commit whose timestamp is closest to and before the incident startTime.
 State: "Commit <sha> by <author> at <time>, ~N min before incident start."
-If you need more signal, use generate_dql_from_natural_language then execute_dql to query logs.
+If you need more signal, use create-dql to build a DQL query, then execute-dql to run it against logs.
 
 ## Step 3 — BRIEF
 Write a 2–3 sentence voice briefing:
@@ -85,16 +81,15 @@ Display prominently:
   ┌──────────────────────────────────────────────────────┐
   │  AWAITING HUMAN APPROVAL                             │
   │  Approval ID: <id>                                   │
-  │  Approve: POST http://localhost:9000/approve/<id>    │
-  │  Reject:  POST http://localhost:9000/reject/<id>     │
+  │  Approve: POST {_APPROVAL_SERVER_URL}/approve/<id>    │
+  │  Reject:  POST {_APPROVAL_SERVER_URL}/reject/<id>     │
   └──────────────────────────────────────────────────────┘
 
 Then call poll_approval_status(approval_id, timeout_seconds=300).
 
 ## Step 5 — ACT
 - Approved → call trigger_github_rollback(commit_sha=<full_sha>, incident_id=<id>)
-  Then call send_event to write a ROLLBACK_TRIGGERED event back into Dynatrace for traceability.
-  Report: "Rollback triggered. Watch: https://github.com/<repo>/actions"
+  Report: "Rollback triggered. Watch: https://github.com/Byrrajus12/voiceops-agent/actions"
 - Rejected → "Operator rejected rollback. Reason: <reason>. Standing down."
 - Timeout → "No decision in 5 min. Standing down — page on-call manually."
 
