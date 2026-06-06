@@ -22,17 +22,24 @@ Dynatrace Davis AI
 │           VoiceOps Incident Commander                   │
 │         Google ADK · Gemini 2.5 Flash · Vertex AI       │
 │                                                         │
+│  PHASE 1 — TRIAGE & MITIGATE                            │
 │  Step 1 DETECT    query_problems → get_problem_by_id    │
-│  Step 2 DIAGNOSE  get_recent_github_commits             │
-│                   create_dql → execute_dql              │
-│                   ask_dynatrace_docs                    │
-│                   find_troubleshooting_guides           │
-│                   create_github_issue                   │
+│  Step 2 TRIAGE    get_recent_github_commits (fast)      │
 │  Step 3 BRIEF     generate_voice_briefing (TTS → MP3)   │
-│  Step 4 APPROVE   request_human_approval                │
-│                   poll_approval_status                  │
-│  Step 5 ACT       trigger_github_rollback               │
-│         VERIFY    query_problems (confirm resolved)     │
+│  Step 4 GATE      HIGH → auto-rollback                  │
+│                   MEDIUM/LOW → request_human_approval   │
+│                   → trigger_github_rollback             │
+│                   → get_github_workflow_status          │
+│                   → query_problems (confirm resolved)   │
+│                                                         │
+│  PHASE 2 — POST-INCIDENT (after service restored)       │
+│  Step 5 RCA       create_dql + execute_dql              │
+│                   adaptive_anomaly_detector             │
+│                   ask_dynatrace_docs                    │
+│  Step 6 IMPACT    blast radius, request count, trend    │
+│  Step 7 CLOSE     generate_voice_briefing (resolved)    │
+│                   create_github_issue (PIR)             │
+│                   close_github_issue                    │
 └──────────────┬──────────────────┬───────────────────────┘
                │                  │
      GitHub Actions           Approval Server
@@ -41,11 +48,12 @@ Dynatrace Davis AI
 
 ## What makes this different
 
-- **Dynatrace MCP Gateway** — uses 8 Dynatrace tools via the official hosted MCP gateway (`StreamableHTTPConnectionParams`), not a subprocess
-- **Closed-loop verification** — after rollback, the agent re-queries Dynatrace to confirm the problem resolved
-- **Human-in-the-loop gate** — no destructive action without explicit operator approval; 5-minute timeout with graceful standdown
-- **Voice-first UX** — Google Cloud TTS Neural2-D voice generates an MP3 briefing before the approval request
-- **Full paper trail** — GitHub issue created automatically at detection time, GitHub Actions workflow records the rollback
+- **Mitigate-first design** — rollback and service restoration happen in Phase 1; RCA and impact analysis run post-mitigation so analysis never delays remediation
+- **Confidence-gated rollback** — HIGH confidence triggers automatic rollback; MEDIUM/LOW routes to human approval with a 5-minute decision window
+- **Dynatrace MCP Gateway** — uses 9 Dynatrace tools via the official hosted MCP gateway (`StreamableHTTPConnectionParams`), not a subprocess
+- **Closed-loop verification** — after rollback, the agent re-queries Dynatrace Davis AI to confirm the problem closed
+- **Voice-first UX** — Google Cloud TTS Neural2-D voice generates an MP3 briefing before the gate, and a second briefing after resolution
+- **Full paper trail** — GitHub issue at detection time, post-incident report with full RCA after resolution
 
 ## Dynatrace MCP Tools Used
 
