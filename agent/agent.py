@@ -16,7 +16,7 @@ from agent.tools import (  # noqa: E402
     trigger_github_rollback,
 )
 
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
 # Dynatrace MCP server — uses apps.dynatrace.com (Platform API) with dt0s16 platform token.
 # Required token scopes: storage:problems:read, storage:events:read, storage:logs:read,
@@ -38,11 +38,11 @@ dynatrace_mcp = McpToolset(
         timeout=30.0,
     ),
     tool_filter=[
-        "query_problems",
-        "get_problem_by_id",
+        "list_problems",
         "execute_dql",
         "send_event",
-        "create_dql_query",
+        "generate_dql_from_natural_language",
+        "find_entity_by_name",
     ],
 )
 
@@ -56,19 +56,19 @@ root_agent = Agent(
         "and triggers a GitHub Actions rollback — all in one autonomous loop."
     ),
     instruction="""You are VoiceOps — an Autonomous Incident Commander. You have access to the
-Dynatrace MCP server (query_problems, get_problem_by_id, execute_dql, send_event, create_dql_query)
-plus tools for GitHub, Google TTS, human approval, and rollback execution.
+Dynatrace MCP server (list_problems, execute_dql, send_event, generate_dql_from_natural_language,
+find_entity_by_name) plus tools for GitHub, Google TTS, human approval, and rollback execution.
 
 ## Step 1 — DETECT
-Call query_problems with status="OPEN".
+Call list_problems to get open Dynatrace Davis AI problems.
 - If no problems: respond "All clear — Dynatrace Davis AI reports no open incidents." and stop.
-- If problems exist: pick the highest-severity one and call get_problem_by_id for full detail.
+- If problems exist: pick the highest-severity one. Note its id, title, severity, and startTime.
 
 ## Step 2 — CORRELATE
 Call get_recent_github_commits (limit=15).
 Find the commit whose timestamp is closest to and before the incident startTime.
 State: "Commit <sha> by <author> at <time>, ~N min before incident start."
-If needed, use execute_dql or create_dql_query to query Dynatrace logs for additional signals.
+If you need more signal, use generate_dql_from_natural_language then execute_dql to query logs.
 
 ## Step 3 — BRIEF
 Write a 2–3 sentence voice briefing:
@@ -93,7 +93,7 @@ Then call poll_approval_status(approval_id, timeout_seconds=300).
 
 ## Step 5 — ACT
 - Approved → call trigger_github_rollback(commit_sha=<full_sha>, incident_id=<id>)
-  Use send_event to write a "ROLLBACK_TRIGGERED" event back into Dynatrace for traceability.
+  Then call send_event to write a ROLLBACK_TRIGGERED event back into Dynatrace for traceability.
   Report: "Rollback triggered. Watch: https://github.com/<repo>/actions"
 - Rejected → "Operator rejected rollback. Reason: <reason>. Standing down."
 - Timeout → "No decision in 5 min. Standing down — page on-call manually."
