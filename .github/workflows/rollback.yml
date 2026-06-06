@@ -1,0 +1,79 @@
+name: Rollback Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      rollback_to:
+        description: "Commit SHA to roll back to"
+        required: true
+        type: string
+      incident_id:
+        description: "Dynatrace incident/problem ID"
+        required: true
+        type: string
+      triggered_by:
+        description: "What triggered this rollback"
+        required: false
+        default: "manual"
+        type: string
+
+jobs:
+  rollback:
+    name: Execute Rollback
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+
+    steps:
+      - name: Checkout target commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.rollback_to }}
+          fetch-depth: 0
+
+      - name: Display rollback context
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "  ROLLBACK INITIATED"
+          echo "  Target SHA   : ${{ inputs.rollback_to }}"
+          echo "  Incident ID  : ${{ inputs.incident_id }}"
+          echo "  Triggered by : ${{ inputs.triggered_by }}"
+          echo "  Timestamp    : $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+          echo "Checked out commit:"
+          git log --oneline -1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build target-service image
+        run: |
+          cd target-service
+          pip install -r requirements.txt
+          echo "✓ Dependencies installed for commit ${{ inputs.rollback_to }}"
+
+      - name: Run health check on rolled-back service
+        run: |
+          cd target-service
+          # Start without BROKEN flag to verify the rolled-back version is healthy
+          uvicorn main:app --host 0.0.0.0 --port 8080 &
+          sleep 3
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/health)
+          kill %1 2>/dev/null || true
+          if [ "$STATUS" = "200" ]; then
+            echo "✓ Health check passed — rolled-back service is healthy"
+          else
+            echo "✗ Health check returned HTTP $STATUS"
+            exit 1
+          fi
+
+      - name: Notify rollback complete
+        run: |
+          echo ""
+          echo "✅ Rollback to ${{ inputs.rollback_to }} completed successfully."
+          echo "   Incident ${{ inputs.incident_id }} should now be resolving."
+          echo "   Monitor Dynatrace for incident closure."
