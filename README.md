@@ -1,72 +1,232 @@
 # VoiceOps — Autonomous Incident Commander
 
-> **Google Cloud Rapid Agent Hackathon 2026 · Dynatrace Track**
+An AI agent built on **Google ADK + Gemini 2.5 Flash** that autonomously detects production incidents via **Dynatrace Davis AI**, correlates them with GitHub commits, speaks a voice briefing via **Google Cloud TTS**, gates rollback on confidence (auto for HIGH, human approval for MEDIUM/LOW), triggers a **GitHub Actions rollback**, then runs a full post-incident RCA — all in one closed loop.
 
-An AI agent built on **Google ADK + Gemini 2.5 Flash** that autonomously detects production incidents via **Dynatrace Davis AI**, diagnoses the root cause by correlating with GitHub commits, narrates a **Google Cloud TTS voice briefing**, waits for human approval, and triggers a **GitHub Actions rollback** — all in one closed loop.
+> Built for the Google Cloud Rapid Agent Hackathon 2026 · Dynatrace Track
+
+---
 
 ## Live Demo
 
 | Service | URL |
 |---------|-----|
-| **Agent Web UI** | https://voiceops-agent-224808509436.us-central1.run.app |
-| **Approval Server** | https://voiceops-approval-224808509436.us-central1.run.app |
-| **Target Service** (broken) | https://voiceops-target-224808509436.us-central1.run.app |
+| Agent Web UI | https://voiceops-agent-224808509436.us-central1.run.app |
+| Approval Dashboard | https://voiceops-approval-224808509436.us-central1.run.app |
+| Target Service | https://voiceops-target-224808509436.us-central1.run.app |
 
-## Architecture
+---
+
+## How It Works
+
+The agent runs in two phases:
+
+**Phase 1 — Triage & Mitigate** (stop the bleeding first)
+1. Queries Dynatrace Davis AI for open problems
+2. Fetches recent GitHub commits, finds any deployed within 60 min of incident start → confidence score
+3. Speaks a voice alert via Google Cloud TTS
+4. HIGH confidence → triggers rollback automatically; MEDIUM/LOW → asks operator for approval via browser dashboard
+5. Polls GitHub Actions until rollback completes, then re-checks Dynatrace to confirm problem closed
+
+**Phase 2 — Post-Incident** (only after service is restored)
+
+6. Runs deep DQL signal analysis + anomaly detection to confirm root cause
+7. Calculates blast radius, failed request count, and error trend
+8. Speaks a resolution briefing, files a post-incident report as a GitHub issue, closes the tracking issue
 
 ```
 Dynatrace Davis AI
       │  Dynatrace MCP Gateway (Streamable HTTP)
       ▼
-┌─────────────────────────────────────────────────────────┐
-│           VoiceOps Incident Commander                   │
-│         Google ADK · Gemini 2.5 Flash · Vertex AI       │
-│                                                         │
-│  PHASE 1 — TRIAGE & MITIGATE                            │
-│  Step 1 DETECT    query_problems → get_problem_by_id    │
-│  Step 2 TRIAGE    get_recent_github_commits (fast)      │
-│  Step 3 BRIEF     generate_voice_briefing (TTS → MP3)   │
-│  Step 4 GATE      HIGH → auto-rollback                  │
-│                   MEDIUM/LOW → request_human_approval   │
-│                   → trigger_github_rollback             │
-│                   → get_github_workflow_status          │
-│                   → query_problems (confirm resolved)   │
-│                                                         │
-│  PHASE 2 — POST-INCIDENT (after service restored)       │
-│  Step 5 RCA       create_dql + execute_dql              │
-│                   adaptive_anomaly_detector             │
-│                   ask_dynatrace_docs                    │
-│  Step 6 IMPACT    blast radius, request count, trend    │
-│  Step 7 CLOSE     generate_voice_briefing (resolved)    │
-│                   create_github_issue (PIR)             │
-│                   close_github_issue                    │
-└──────────────┬──────────────────┬───────────────────────┘
-               │                  │
-     GitHub Actions           Approval Server
-     rollback.yml             /approve  /reject
+┌──────────────────────────────────────────────┐
+│         VoiceOps Incident Commander          │
+│     Google ADK · Gemini 2.5 Flash · GCP      │
+│                                              │
+│  Phase 1 — Triage & Mitigate                 │
+│    query_problems + get_problem_by_id        │
+│    get_recent_github_commits  (confidence)   │
+│    generate_voice_briefing    (TTS alert)    │
+│    [HIGH] → trigger_github_rollback          │
+│    [MED/LOW] → request_human_approval        │
+│               → trigger_github_rollback      │
+│    get_github_workflow_status (poll)         │
+│    query_problems             (verify)       │
+│                                              │
+│  Phase 2 — Post-Incident Analysis            │
+│    create_dql + execute_dql   (signals)      │
+│    adaptive_anomaly_detector                 │
+│    ask_dynatrace_docs                        │
+│    generate_voice_briefing    (resolved)     │
+│    create_github_issue        (PIR)          │
+│    close_github_issue                        │
+└─────────────────┬──────────────┬─────────────┘
+                  │              │
+        GitHub Actions     Approval Server
+        rollback.yml       browser dashboard
 ```
 
-## What makes this different
+---
 
-- **Mitigate-first design** — rollback and service restoration happen in Phase 1; RCA and impact analysis run post-mitigation so analysis never delays remediation
-- **Confidence-gated rollback** — HIGH confidence triggers automatic rollback; MEDIUM/LOW routes to human approval with a 5-minute decision window
-- **Dynatrace MCP Gateway** — uses 9 Dynatrace tools via the official hosted MCP gateway (`StreamableHTTPConnectionParams`), not a subprocess
-- **Closed-loop verification** — after rollback, the agent re-queries Dynatrace Davis AI to confirm the problem closed
-- **Voice-first UX** — Google Cloud TTS Neural2-D voice generates an MP3 briefing before the gate, and a second briefing after resolution
-- **Full paper trail** — GitHub issue at detection time, post-incident report with full RCA after resolution
+## Prerequisites
 
-## Dynatrace MCP Tools Used
+- Python 3.11+
+- A **Google Cloud project** with Vertex AI API and Text-to-Speech API enabled
+- A **Dynatrace** environment with the MCP Gateway enabled (`pmn*.apps.dynatrace.com`)
+- A **GitHub** repository with `rollback.yml` committed (see `.github/workflows/rollback.yml`)
+- Application Default Credentials configured: `gcloud auth application-default login`
 
-| Tool | Purpose |
+---
+
+## Local Setup
+
+### 1. Clone and install
+
+```bash
+git clone https://github.com/Byrrajus12/voiceops-agent.git
+cd voiceops-agent
+pip install -r requirements.txt
+```
+
+### 2. Configure environment
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` and fill in all values (see [Environment Variables](#environment-variables) below).
+
+### 3. Start the approval server
+
+```bash
+uvicorn approval-server.main:app --port 8080
+```
+
+The approval dashboard is at http://localhost:8080.
+
+### 4. Start the agent
+
+```bash
+adk web agent
+```
+
+Open http://localhost:8000, select `incident_commander`, and send:
+
+> Check for active incidents and run the full incident response workflow.
+
+---
+
+## Triggering an Incident (Demo)
+
+To simulate a production incident, deploy the target service with `BROKEN=true`. This makes `POST /voice-agent/session/start` return HTTP 500, which a Dynatrace Synthetic Monitor will detect and escalate to Davis AI.
+
+To break/fix locally:
+```bash
+# Simulate failure
+TARGET_SERVICE_URL=http://localhost:9000
+BROKEN=true uvicorn target-service.main:app --port 9000
+
+# The agent prompt once a Davis AI problem appears:
+# "Check for active incidents and run the full incident response workflow."
+```
+
+---
+
+## Approving / Rejecting a Rollback
+
+When the agent hits MEDIUM or LOW confidence, it pauses and posts a request to the approval server. You have three ways to respond:
+
+**Browser** — open the approval dashboard and click Approve or Reject.
+
+**By incident ID** (simplest for demo):
+```bash
+curl -X POST "<APPROVAL_SERVER_URL>/incident/<display_id>/approve"
+curl -X POST "<APPROVAL_SERVER_URL>/incident/<display_id>/reject?reason=false+positive"
+```
+
+**By approval ID** (printed by the agent):
+```bash
+curl -X POST "<APPROVAL_SERVER_URL>/approve/<approval_id>"
+curl -X POST "<APPROVAL_SERVER_URL>/reject/<approval_id>"
+```
+
+The agent polls for up to 5 minutes. If no decision arrives it stands down and tells you to escalate manually.
+
+---
+
+## Environment Variables
+
+Copy `.env.example` to `.env` and fill in:
+
+| Variable | Description |
+|----------|-------------|
+| `DYNATRACE_PLATFORM_TOKEN` | `dt0s16.*` platform token — see scopes below |
+| `GITHUB_PAT` | GitHub fine-grained PAT — see scopes below |
+| `GITHUB_REPO` | Repository to monitor, e.g. `owner/repo` |
+| `GOOGLE_CLOUD_PROJECT` | GCP project ID for Vertex AI + TTS |
+| `GOOGLE_CLOUD_LOCATION` | Set to `global` for Gemini 2.5 Flash |
+| `GOOGLE_GENAI_USE_VERTEXAI` | Set to `1` |
+| `GOOGLE_APPLICATION_CREDENTIALS` | Path to service account key JSON (Cloud Run uses workload identity instead) |
+| `APPROVAL_SERVER_URL` | Base URL of the approval server |
+| `TARGET_SERVICE_URL` | Base URL of the service being monitored |
+| `GEMINI_MODEL` | Model ID, default `gemini-2.5-flash` |
+
+### Dynatrace Platform Token scopes
+
+```
+mcp-gateway:servers:read
+mcp-gateway:servers:invoke
+storage:problems:read
+storage:events:read
+storage:logs:read
+davis:problems:read
+document:read
+```
+
+### GitHub PAT permissions (fine-grained)
+
+```
+Contents: Read
+Issues: Read & Write
+Actions: Read & Write
+```
+
+---
+
+## Dynatrace MCP Tools
+
+| Tool | Used for |
 |------|---------|
-| `query_problems` | Fetch all open Davis AI problems |
-| `get_problem_by_id` | Full details on a specific problem |
-| `execute_dql` | Run DQL to query logs/traces/metrics |
+| `query_problems` | List all open Davis AI problems |
+| `get_problem_by_id` | Full problem details + affected entities |
+| `execute_dql` | Query logs, traces, and metrics |
 | `create_dql` | Generate DQL from natural language |
-| `get_entity_name` | Resolve DT entity ID → human name |
-| `get_entity_id` | Find entity ID by name |
-| `ask_dynatrace_docs` | Look up Dynatrace docs for problem context |
-| `find_troubleshooting_guides` | Fetch remediation runbooks |
+| `get_entity_name` | Resolve entity ID to human-readable name |
+| `get_entity_id` | Look up entity by name |
+| `ask_dynatrace_docs` | Explain a problem category from DT docs |
+| `find_troubleshooting_guides` | Fetch runbooks for a problem type |
+| `adaptive_anomaly_detector` | Pinpoint when a metric deviated from baseline |
+
+---
+
+## Project Layout
+
+```
+voiceops-agent/
+├── agent/
+│   ├── agent.py            # ADK Agent — McpToolset + instruction + tool list
+│   └── tools.py            # 8 custom tools: GitHub, TTS, approval, rollback
+├── approval-server/
+│   └── main.py             # FastAPI approval server + browser dashboard
+├── target-service/
+│   └── main.py             # Demo service — BROKEN=true triggers HTTP 500 + OTel
+├── .github/workflows/
+│   └── rollback.yml        # workflow_dispatch rollback workflow
+├── Dockerfile              # Root image for agent Cloud Run deploy
+├── requirements.txt
+├── .env.example
+└── PROGRESS.md             # Development status and next steps
+```
+
+---
 
 ## Stack
 
@@ -75,84 +235,11 @@ Dynatrace Davis AI
 | Agent framework | Google ADK 2.2.0 |
 | LLM | Gemini 2.5 Flash via Vertex AI (`locations/global`) |
 | Observability | Dynatrace MCP Gateway + Davis AI |
-| Voice | Google Cloud TTS Neural2-D |
+| Voice | Google Cloud TTS — `en-US-Neural2-D` |
 | Source control | GitHub REST API + GitHub Actions |
 | Hosting | Google Cloud Run |
 
-## Project Layout
-
-```
-voiceops-agent/
-├── agent/
-│   ├── agent.py          # ADK Agent with McpToolset + 7 custom tools
-│   ├── tools.py          # GitHub, TTS, approval, rollback tool functions
-│   └── Dockerfile        # Cloud Run image (python:3.11-slim)
-├── approval-server/
-│   └── main.py           # FastAPI: /approval/request, /approve/{id}, /reject/{id}
-├── target-service/
-│   └── main.py           # FastAPI with BROKEN=true mode + OTel traces to Dynatrace
-├── .github/workflows/
-│   └── rollback.yml      # workflow_dispatch: checkout sha, build, health check
-├── Dockerfile            # Root Dockerfile for agent Cloud Run deploy
-└── .env.example          # Required environment variables
-```
-
-## Quick Start (local)
-
-```bash
-git clone https://github.com/Byrrajus12/voiceops-agent.git
-cd voiceops-agent
-cp .env.example .env
-# Fill in tokens — see .env.example for required scopes
-
-pip install -r requirements.txt
-
-# Start approval server
-uvicorn approval-server.main:app --port 8080
-
-# Run agent web UI
-adk web agent
-```
-
-Open http://localhost:8000, then prompt:
-> "Check for active incidents and run the full incident response workflow."
-
-## Running the demo
-
-### Approve a rollback
-When the agent prints an `approval_id`:
-```bash
-# Via approval_id
-curl -X POST "https://voiceops-approval-224808509436.us-central1.run.app/approve/<approval_id>"
-
-# Via incident_id (simpler)
-curl -X POST "https://voiceops-approval-224808509436.us-central1.run.app/incident/<incident_id>/approve"
-```
-
-### Reject
-```bash
-curl -X POST "https://voiceops-approval-224808509436.us-central1.run.app/reject/<approval_id>?reason=false+positive"
-```
-
-## Required Token Scopes
-
-### Dynatrace Platform Token (dt0s16.*)
-`mcp-gateway:servers:read`, `mcp-gateway:servers:invoke`, `storage:problems:read`, `storage:events:read`, `storage:logs:read`, `davis:problems:read`, `document:read`
-
-### GitHub PAT (fine-grained)
-`Contents: read`, `Issues: write`, `Actions: write`
-
-## Environment Variables
-
-See [`.env.example`](.env.example) for full list. Key variables:
-
-| Variable | Description |
-|----------|-------------|
-| `DYNATRACE_PLATFORM_TOKEN` | DT Platform token with MCP gateway scopes |
-| `GITHUB_PAT` | GitHub PAT with repo + actions write |
-| `GITHUB_REPO` | `owner/repo` to monitor |
-| `GOOGLE_CLOUD_PROJECT` | GCP project for Vertex AI + TTS |
-| `APPROVAL_SERVER_URL` | Approval server base URL |
+---
 
 ## License
 
