@@ -68,7 +68,7 @@ def generate_voice_briefing(briefing_text: str, output_path: str = "/tmp/inciden
         voice = texttospeech.VoiceSelectionParams(
             language_code="en-US",
             name="en-US-Neural2-D",
-            ssml_gender=texttospeech.SsmlVoiceGender.NEUTRAL,
+            ssml_gender=texttospeech.SsmlVoiceGender.MALE,
         )
         audio_config = texttospeech.AudioConfig(
             audio_encoding=texttospeech.AudioEncoding.MP3,
