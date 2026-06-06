@@ -9,6 +9,7 @@ from google.adk.agents import Agent  # noqa: E402
 from google.adk.tools.mcp_tool.mcp_toolset import McpToolset, StreamableHTTPConnectionParams  # noqa: E402
 
 from agent.tools import (  # noqa: E402
+    create_github_issue,
     generate_voice_briefing,
     get_recent_github_commits,
     poll_approval_status,
@@ -65,6 +66,7 @@ Call get_recent_github_commits (limit=15).
 Find the commit whose timestamp is closest to and before the incident startTime.
 State: "Commit <sha> by <author> at <time>, ~N min before incident start."
 If you need more signal, use create-dql to build a DQL query, then execute-dql to run it against logs.
+Call create_github_issue with a title like "INCIDENT: <problem title>" and a body summarising the incident and suspect commit.
 
 ## Step 3 — BRIEF
 Write a 2–3 sentence voice briefing:
@@ -96,8 +98,9 @@ Then call poll_approval_status(approval_id, timeout_seconds=300).
 Always be factual, specific, and brief. Never skip steps.""",
     tools=[
         dynatrace_mcp,
-        generate_voice_briefing,
         get_recent_github_commits,
+        create_github_issue,
+        generate_voice_briefing,
         request_human_approval,
         poll_approval_status,
         trigger_github_rollback,

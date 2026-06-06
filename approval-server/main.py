@@ -69,6 +69,30 @@ async def get_status(approval_id: str):
     return result
 
 
+@app.post("/incident/{incident_id}/approve")
+async def approve_by_incident(incident_id: str, reason: Optional[str] = Query(default=None)):
+    match = next((v for v in _pending.values() if v["incident_id"] == incident_id and v["status"] == "pending"), None)
+    if not match:
+        raise HTTPException(status_code=404, detail="No pending approval for this incident_id")
+    return await approve(match["id"], reason)
+
+
+@app.post("/incident/{incident_id}/reject")
+async def reject_by_incident(incident_id: str, reason: Optional[str] = Query(default=None)):
+    match = next((v for v in _pending.values() if v["incident_id"] == incident_id and v["status"] == "pending"), None)
+    if not match:
+        raise HTTPException(status_code=404, detail="No pending approval for this incident_id")
+    return await reject(match["id"], reason)
+
+
+@app.get("/incident/{incident_id}/status")
+async def status_by_incident(incident_id: str):
+    match = next((v for v in _pending.values() if v["incident_id"] == incident_id), None)
+    if not match:
+        raise HTTPException(status_code=404, detail="No approval found for this incident_id")
+    return {"status": match["status"]}
+
+
 @app.get("/approvals/pending")
 async def list_pending():
     return [v for v in _pending.values() if v["status"] == "pending"]

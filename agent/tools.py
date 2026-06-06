@@ -155,6 +155,36 @@ def poll_approval_status(approval_id: str, timeout_seconds: int = 300, poll_inte
     }
 
 
+def create_github_issue(incident_id: str, title: str, body: str) -> dict:
+    """Create an incident tracking issue on GitHub with the 'incident' label.
+
+    Call this after detecting a Dynatrace problem to create a paper trail.
+    Returns the URL of the created issue.
+    """
+    headers = {
+        "Authorization": f"Bearer {GITHUB_TOKEN}",
+        "Accept": "application/vnd.github.v3+json",
+    }
+    owner, repo = GITHUB_REPO.split("/", 1)
+    try:
+        resp = requests.post(
+            f"https://api.github.com/repos/{owner}/{repo}/issues",
+            headers=headers,
+            json={"title": title, "body": body, "labels": ["incident"]},
+            timeout=30,
+        )
+    except requests.RequestException as e:
+        return {"error": f"Network error contacting GitHub: {e}"}
+
+    if resp.status_code == 410:
+        return {"error": "Issues are disabled on this repository"}
+    if resp.status_code not in (200, 201):
+        return {"error": f"GitHub API returned {resp.status_code}: {resp.text[:300]}"}
+
+    issue = resp.json()
+    return {"url": issue["html_url"], "number": issue["number"], "incident_id": incident_id}
+
+
 def trigger_github_rollback(commit_sha: str, incident_id: str) -> dict:
     """Trigger the GitHub Actions rollback workflow via workflow_dispatch.
 
