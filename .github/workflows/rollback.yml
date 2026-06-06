@@ -17,13 +17,18 @@ on:
         default: "manual"
         type: string
 
+env:
+  PROJECT_ID: sreagnt
+  REGION: us-central1
+  SERVICE: voiceops-target
+
 jobs:
   rollback:
     name: Execute Rollback
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      deployments: write
+      id-token: write
 
     steps:
       - name: Checkout target commit
@@ -41,39 +46,53 @@ jobs:
           echo "  Triggered by : ${{ inputs.triggered_by }}"
           echo "  Timestamp    : $(date -u +%Y-%m-%dT%H:%M:%SZ)"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo ""
-          echo "Checked out commit:"
           git log --oneline -1
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
         with:
-          python-version: "3.11"
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
 
-      - name: Build target-service image
-        run: |
-          cd target-service
-          pip install -r requirements.txt
-          echo "✓ Dependencies installed for commit ${{ inputs.rollback_to }}"
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
 
-      - name: Run health check on rolled-back service
+      - name: Build and push image
         run: |
-          cd target-service
-          # Start without BROKEN flag to verify the rolled-back version is healthy
-          uvicorn main:app --host 0.0.0.0 --port 8080 &
-          sleep 3
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/health)
-          kill %1 2>/dev/null || true
+          IMAGE="gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE }}:${{ inputs.rollback_to }}"
+          gcloud builds submit ./target-service \
+            --tag "$IMAGE" \
+            --project "${{ env.PROJECT_ID }}"
+          echo "IMAGE=$IMAGE" >> $GITHUB_ENV
+
+      - name: Deploy to Cloud Run (BROKEN=false)
+        run: |
+          gcloud run deploy ${{ env.SERVICE }} \
+            --image "$IMAGE" \
+            --region ${{ env.REGION }} \
+            --project ${{ env.PROJECT_ID }} \
+            --set-env-vars "BROKEN=false,DYNATRACE_PLATFORM_TOKEN=${{ secrets.DYNATRACE_PLATFORM_TOKEN }}" \
+            --quiet
+
+      - name: Health check rolled-back service
+        run: |
+          URL=$(gcloud run services describe ${{ env.SERVICE }} \
+            --region ${{ env.REGION }} \
+            --project ${{ env.PROJECT_ID }} \
+            --format 'value(status.url)')
+          echo "Checking $URL/health ..."
+          sleep 5
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$URL/health")
           if [ "$STATUS" = "200" ]; then
-            echo "✓ Health check passed — rolled-back service is healthy"
+            echo "✓ Health check passed — service is healthy after rollback"
           else
             echo "✗ Health check returned HTTP $STATUS"
             exit 1
           fi
 
-      - name: Notify rollback complete
+      - name: Summary
         run: |
           echo ""
-          echo "✅ Rollback to ${{ inputs.rollback_to }} completed successfully."
-          echo "   Incident ${{ inputs.incident_id }} should now be resolving."
-          echo "   Monitor Dynatrace for incident closure."
+          echo "✅ Rollback to ${{ inputs.rollback_to }} deployed and verified healthy."
+          echo "   Incident ${{ inputs.incident_id }} should now be resolving in Dynatrace."
