@@ -9,8 +9,10 @@ from google.adk.agents import Agent  # noqa: E402
 from google.adk.tools.mcp_tool.mcp_toolset import McpToolset, StreamableHTTPConnectionParams  # noqa: E402
 
 from agent.tools import (  # noqa: E402
+    close_github_issue,
     create_github_issue,
     generate_voice_briefing,
+    get_github_workflow_status,
     get_recent_github_commits,
     poll_approval_status,
     request_human_approval,
@@ -137,10 +139,42 @@ Branch on the confidence level you established in Step 2:
 STEP 5 — ACT
 ═══════════════════════════════════════════════
 APPROVED (or auto-approved via HIGH confidence) →
-  Call trigger_github_rollback(commit_sha=<FULL 40-char sha>, incident_id=<display_id>).
-  Report: "🔄 Rollback triggered → https://github.com/Byrrajus12/voiceops-agent/actions"
-  Then call query_problems again to check if the incident is resolving.
-  Report: "📊 Post-rollback check: [RESOLVED / still open — continue monitoring]"
+
+  5a. TRIGGER
+      Call trigger_github_rollback(commit_sha=<FULL 40-char sha>, incident_id=<display_id>).
+      Report: "🔄 Rollback workflow dispatched → https://github.com/Byrrajus12/voiceops-agent/actions"
+
+  5b. WAIT & VERIFY WORKFLOW
+      Wait ~60 seconds for the workflow to run, then call get_github_workflow_status().
+      - conclusion=success  → "✅ Rollback workflow succeeded."
+      - conclusion=failure  → "⚠️ Rollback workflow FAILED — manual intervention needed."
+      - status=in_progress  → report it's still running.
+
+  5c. VERIFY INCIDENT RESOLVED
+      Call query_problems to check if problem_id is still ACTIVE.
+      - Problem gone or CLOSED → "✅ Incident <display_id> resolved. Davis AI has closed the problem."
+      - Still ACTIVE           → "⚠️ Incident still open after rollback — may need additional investigation."
+
+  5d. RESOLUTION BRIEFING
+      Generate a short voice briefing: "Incident <display_id> is resolved. Rollback to commit <sha> succeeded.
+      Service is recovering. GitHub Actions confirmed success. Incident closed."
+      Call generate_voice_briefing with this text.
+
+  5e. CLOSE ISSUE
+      Call close_github_issue(issue_number=<number from Step 2C>,
+        resolution_comment="✅ Resolved by VoiceOps agent. Rollback to <sha> succeeded. Incident closed at <time>.")
+
+  5f. FINAL SUMMARY
+      Print a clean incident report:
+      ┌──────────────────────────────────────────────────┐
+      │  INCIDENT RESOLVED                               │
+      │  Problem    : <display_id>                       │
+      │  Root cause : commit <sha> — <message>           │
+      │  Resolved   : rollback to <sha>                  │
+      │  Duration   : ~N minutes                         │
+      │  Workflow   : success / failed                   │
+      │  GitHub     : <issue URL>                        │
+      └──────────────────────────────────────────────────┘
 
 REJECTED →
   "Operator rejected rollback. Reason: <reason>. Standing down. Page on-call if error rate persists."
@@ -163,5 +197,7 @@ RULES
         request_human_approval,
         poll_approval_status,
         trigger_github_rollback,
+        get_github_workflow_status,
+        close_github_issue,
     ],
 )

@@ -230,3 +230,77 @@ def trigger_github_rollback(commit_sha: str, incident_id: str) -> dict:
     if resp.status_code == 422:
         return {"error": f"Invalid dispatch inputs: {resp.text[:300]}"}
     return {"error": f"GitHub Actions API returned {resp.status_code}: {resp.text[:300]}"}
+
+
+def get_github_workflow_status(workflow_file: str = "rollback.yml") -> dict:
+    """Check the status of the most recent GitHub Actions workflow run.
+
+    Call this ~60 seconds after trigger_github_rollback to confirm the rollback
+    workflow completed successfully. Returns conclusion: success|failure|in_progress.
+    """
+    headers = {
+        "Authorization": f"Bearer {GITHUB_TOKEN}",
+        "Accept": "application/vnd.github.v3+json",
+    }
+    owner, repo = GITHUB_REPO.split("/", 1)
+    try:
+        resp = requests.get(
+            f"https://api.github.com/repos/{owner}/{repo}/actions/workflows/{workflow_file}/runs",
+            headers=headers,
+            params={"per_page": 1},
+            timeout=30,
+        )
+    except requests.RequestException as e:
+        return {"error": f"Network error: {e}"}
+
+    if resp.status_code != 200:
+        return {"error": f"GitHub API returned {resp.status_code}"}
+
+    runs = resp.json().get("workflow_runs", [])
+    if not runs:
+        return {"status": "no_runs", "message": "No workflow runs found"}
+
+    run = runs[0]
+    return {
+        "status": run["status"],
+        "conclusion": run["conclusion"],
+        "run_id": run["id"],
+        "html_url": run["html_url"],
+        "created_at": run["created_at"],
+        "head_sha": run["head_sha"][:8],
+        "display": f"{run['status'].upper()} / {run['conclusion'] or 'in progress'}"
+    }
+
+
+def close_github_issue(issue_number: int, resolution_comment: str) -> dict:
+    """Close the incident GitHub issue with a resolution comment.
+
+    Call this after confirming the incident is resolved to complete the paper trail.
+    """
+    headers = {
+        "Authorization": f"Bearer {GITHUB_TOKEN}",
+        "Accept": "application/vnd.github.v3+json",
+    }
+    owner, repo = GITHUB_REPO.split("/", 1)
+    try:
+        # Post resolution comment
+        requests.post(
+            f"https://api.github.com/repos/{owner}/{repo}/issues/{issue_number}/comments",
+            headers=headers,
+            json={"body": resolution_comment},
+            timeout=30,
+        )
+        # Close the issue
+        resp = requests.patch(
+            f"https://api.github.com/repos/{owner}/{repo}/issues/{issue_number}",
+            headers=headers,
+            json={"state": "closed", "state_reason": "completed"},
+            timeout=30,
+        )
+    except requests.RequestException as e:
+        return {"error": f"Network error: {e}"}
+
+    if resp.status_code != 200:
+        return {"error": f"GitHub API returned {resp.status_code}: {resp.text[:200]}"}
+
+    return {"status": "closed", "issue_number": issue_number, "url": resp.json()["html_url"]}
