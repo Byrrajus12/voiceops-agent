@@ -102,17 +102,19 @@ def generate_voice_briefing(briefing_text: str, output_path: str = "/tmp/inciden
         return {"status": "error", "error": str(e), "briefing_text": briefing_text}
 
 
-def request_human_approval(incident_id: str, action: str, summary: str, risk_level: str = "high") -> dict:
+def request_human_approval(incident_id: str, action: str, summary: str, risk_level: str = "high", confidence: str = "MEDIUM") -> dict:
     """Submit a rollback approval request to the human approval server.
 
-    Returns an approval_id. Share this ID with the operator so they can approve or reject
-    via POST /approve/{approval_id} or POST /reject/{approval_id} on the approval server.
+    Only call this for MEDIUM or LOW confidence diagnoses. HIGH confidence cases
+    should trigger rollback directly without human gate.
+    Returns an approval_id that the operator uses to approve/reject via the dashboard.
     """
     payload = {
         "incident_id": incident_id,
         "action": action,
         "summary": summary,
         "risk_level": risk_level,
+        "confidence": confidence,
     }
     try:
         resp = requests.post(f"{APPROVAL_SERVER}/approval/request", json=payload, timeout=30)

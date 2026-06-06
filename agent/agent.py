@@ -101,31 +101,46 @@ Write a concise voice briefing (3–4 sentences max):
 Call generate_voice_briefing with this text. Report the saved path.
 
 ═══════════════════════════════════════════════
-STEP 4 — REQUEST HUMAN APPROVAL
+STEP 4 — DECIDE: AUTO-ROLLBACK OR HUMAN GATE
 ═══════════════════════════════════════════════
-Call request_human_approval with:
-  incident_id=display_id, action="rollback to <sha>: <commit_message>", summary=<1-sentence summary>, risk_level="high"
+Branch on the confidence level you established in Step 2:
 
-Display this block clearly:
-┌─────────────────────────────────────────────────────────────┐
-│  ⚠️  HUMAN APPROVAL REQUIRED                                │
-│  Incident : <display_id>                                    │
-│  Action   : rollback to <sha>                               │
-│  Approve  : POST {_APPROVAL_SERVER_URL}/approve/<approval_id>  │
-│  Reject   : POST {_APPROVAL_SERVER_URL}/reject/<approval_id>   │
-│  Timeout  : 5 minutes                                       │
-└─────────────────────────────────────────────────────────────┘
+── HIGH CONFIDENCE ──────────────────────────────────────────
+  Single clear suspect commit, correlation is unambiguous.
+  → Skip human approval. Go directly to Step 5 (rollback).
+  State: "🤖 HIGH confidence — triggering automated rollback without human gate."
 
-Call poll_approval_status(approval_id=<id>, timeout_seconds=300).
+── MEDIUM or LOW CONFIDENCE ─────────────────────────────────
+  Multiple suspect commits, or correlation is unclear.
+  → Human gate required.
+  Call request_human_approval with:
+    incident_id=display_id,
+    action="rollback to <sha>: <commit_message>",
+    summary=<1-sentence summary>,
+    risk_level="high",
+    confidence=<your confidence level>
+
+  Display this block:
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  ⚠️  HUMAN APPROVAL REQUIRED  ({_APPROVAL_SERVER_URL}/)         │
+  │  Incident   : <display_id>     Confidence: MEDIUM/LOW           │
+  │  Action     : rollback to <sha>                                 │
+  │  Approve UI : {_APPROVAL_SERVER_URL}/                           │
+  │  Approve API: POST {_APPROVAL_SERVER_URL}/approve/<approval_id> │
+  │  Reject API : POST {_APPROVAL_SERVER_URL}/reject/<approval_id>  │
+  │  Timeout    : 5 minutes                                         │
+  └─────────────────────────────────────────────────────────────────┘
+
+  Call poll_approval_status(approval_id=<id>, timeout_seconds=300).
 
 ═══════════════════════════════════════════════
 STEP 5 — ACT
 ═══════════════════════════════════════════════
-APPROVED →
+APPROVED (or auto-approved via HIGH confidence) →
   Call trigger_github_rollback(commit_sha=<FULL 40-char sha>, incident_id=<display_id>).
   Report: "🔄 Rollback triggered → https://github.com/Byrrajus12/voiceops-agent/actions"
-  Wait 30 seconds, then call query_problems again to check if the incident is resolving.
-  Report: "📊 Post-rollback status: [RESOLVED / still open — continue monitoring]"
+  Then call query_problems again to check if the incident is resolving.
+  Report: "📊 Post-rollback check: [RESOLVED / still open — continue monitoring]"
 
 REJECTED →
   "Operator rejected rollback. Reason: <reason>. Standing down. Page on-call if error rate persists."
