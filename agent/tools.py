@@ -1,103 +1,17 @@
-"""Tool functions for the Incident Commander agent."""
+"""Tool functions for the Incident Commander agent.
+
+Dynatrace tools are provided via the Dynatrace MCP server (McpToolset in agent.py).
+This module covers: GitHub commit lookup, Google TTS briefing, human approval gateway,
+and GitHub Actions rollback dispatch.
+"""
 import os
 import time
-from datetime import datetime, timezone
 
 import requests
 
-DYNATRACE_BASE = f"https://{os.getenv('DYNATRACE_TENANT', 'wkf10640.apps.dynatrace.com')}"
-DYNATRACE_TOKEN = os.getenv("DYNATRACE_PLATFORM_TOKEN", "")
 GITHUB_TOKEN = os.getenv("GITHUB_PAT", "")
 GITHUB_REPO = os.getenv("GITHUB_REPO", "Byrrajus12/voiceops-agent")
 APPROVAL_SERVER = os.getenv("APPROVAL_SERVER_URL", "http://localhost:9000")
-
-
-def check_dynatrace_incidents() -> dict:
-    """Query Dynatrace for currently open problems/incidents.
-
-    Returns a list of open incidents with severity, affected entities, and start time.
-    Call this first to detect whether a production problem exists.
-    """
-    headers = {
-        "Authorization": f"Api-Token {DYNATRACE_TOKEN}",
-        "Accept": "application/json; charset=utf-8",
-    }
-    params = {
-        "problemSelector": "status(OPEN)",
-        "fields": "+evidenceDetails,+impactAnalysis",
-        "pageSize": 10,
-    }
-    try:
-        resp = requests.get(
-            f"{DYNATRACE_BASE}/api/v2/problems",
-            headers=headers,
-            params=params,
-            timeout=30,
-        )
-    except requests.RequestException as e:
-        return {"error": f"Network error contacting Dynatrace: {e}"}
-
-    if resp.status_code == 401:
-        return {"error": "Dynatrace authentication failed — check DYNATRACE_PLATFORM_TOKEN"}
-    if resp.status_code != 200:
-        return {"error": f"Dynatrace API returned {resp.status_code}: {resp.text[:300]}"}
-
-    data = resp.json()
-    problems = data.get("problems", [])
-    if not problems:
-        return {"incidents": [], "count": 0, "message": "No open incidents — all clear"}
-
-    formatted = []
-    for p in problems[:5]:
-        start_ms = p.get("startTime", 0)
-        start_dt = datetime.fromtimestamp(start_ms / 1000, tz=timezone.utc).isoformat() if start_ms else "unknown"
-        formatted.append({
-            "id": p.get("problemId"),
-            "title": p.get("title"),
-            "severity": p.get("severityLevel"),
-            "impact": p.get("impactLevel"),
-            "status": p.get("status"),
-            "start_time": start_dt,
-            "start_time_ms": start_ms,
-            "affected_entities": [e.get("name") for e in p.get("affectedEntities", [])[:5]],
-            "root_cause": p.get("evidenceDetails", {}).get("details", [{}])[0].get("displayName") if p.get("evidenceDetails") else None,
-        })
-
-    return {"incidents": formatted, "count": len(formatted)}
-
-
-def create_dynatrace_test_event(service_name: str = "checkout-service", error_rate: float = 0.8) -> dict:
-    """Ingest a custom availability event into Dynatrace to simulate an incident for demo purposes.
-
-    Use this when there are no real incidents but you need to demonstrate the workflow.
-    """
-    headers = {
-        "Authorization": f"Api-Token {DYNATRACE_TOKEN}",
-        "Content-Type": "application/json; charset=utf-8",
-    }
-    payload = {
-        "eventType": "AVAILABILITY_EVENT",
-        "title": f"High error rate detected on {service_name}",
-        "entitySelector": f"type(SERVICE),entityName({service_name})",
-        "properties": {
-            "error_rate": str(error_rate),
-            "triggered_by": "voiceops-demo",
-            "description": f"{service_name} is returning {error_rate*100:.0f}% HTTP 500 errors",
-        },
-    }
-    try:
-        resp = requests.post(
-            f"{DYNATRACE_BASE}/api/v2/events/ingest",
-            headers=headers,
-            json=payload,
-            timeout=30,
-        )
-    except requests.RequestException as e:
-        return {"error": f"Network error: {e}"}
-
-    if resp.status_code in (200, 201):
-        return {"status": "event_ingested", "response": resp.json()}
-    return {"error": f"Dynatrace events API returned {resp.status_code}: {resp.text[:300]}"}
 
 
 def get_recent_github_commits(limit: int = 10) -> dict:
@@ -175,7 +89,6 @@ def generate_voice_briefing(briefing_text: str, output_path: str = "/tmp/inciden
             "text_length": len(briefing_text),
         }
     except ImportError:
-        # Fallback: save the text if TTS library not available
         text_path = output_path.replace(".mp3", ".txt")
         with open(text_path, "w") as f:
             f.write(briefing_text)
@@ -281,7 +194,7 @@ def trigger_github_rollback(commit_sha: str, incident_id: str) -> dict:
             "actions_url": f"https://github.com/{GITHUB_REPO}/actions",
         }
     if resp.status_code == 404:
-        return {"error": "rollback.yml workflow not found — ensure .github/workflows/rollback.yml exists and is committed to main"}
+        return {"error": "rollback.yml not found — ensure .github/workflows/rollback.yml is committed to main"}
     if resp.status_code == 422:
         return {"error": f"Invalid dispatch inputs: {resp.text[:300]}"}
     return {"error": f"GitHub Actions API returned {resp.status_code}: {resp.text[:300]}"}

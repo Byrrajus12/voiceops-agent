@@ -1,4 +1,4 @@
-"""Autonomous Incident Commander — Google ADK agent definition."""
+"""Autonomous Incident Commander — Google ADK agent with Dynatrace MCP integration."""
 import os
 
 from dotenv import load_dotenv
@@ -6,10 +6,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from google.adk.agents import Agent  # noqa: E402
+from google.adk.tools.mcp_tool.mcp_toolset import McpToolset, StdioConnectionParams, StdioServerParameters  # noqa: E402
 
 from agent.tools import (  # noqa: E402
-    check_dynatrace_incidents,
-    create_dynatrace_test_event,
     generate_voice_briefing,
     get_recent_github_commits,
     poll_approval_status,
@@ -19,63 +18,91 @@ from agent.tools import (  # noqa: E402
 
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
 
+# Dynatrace MCP server — uses apps.dynatrace.com (Platform API) with dt0s16 platform token.
+# Required token scopes: storage:problems:read, storage:events:read, storage:logs:read,
+#   davis:problems:read, document:read, environment-api:events:write
+_dt_env = os.getenv("DT_ENVIRONMENT", f"https://{os.getenv('DYNATRACE_TENANT', 'pmn17776.apps.dynatrace.com')}")
+if not _dt_env.startswith("http"):
+    _dt_env = f"https://{_dt_env}"
+
+dynatrace_mcp = McpToolset(
+    connection_params=StdioConnectionParams(
+        server_params=StdioServerParameters(
+            command="npx",
+            args=["-y", "@dynatrace-oss/dynatrace-mcp-server@latest"],
+            env={
+                "DT_ENVIRONMENT": _dt_env,
+                "DT_PLATFORM_TOKEN": os.getenv("DYNATRACE_PLATFORM_TOKEN", ""),
+            },
+        ),
+        timeout=30.0,
+    ),
+    tool_filter=[
+        "query_problems",
+        "get_problem_by_id",
+        "execute_dql",
+        "send_event",
+        "create_dql_query",
+    ],
+)
+
 root_agent = Agent(
     name="incident_commander",
     model=GEMINI_MODEL,
     description=(
-        "Autonomous Incident Commander: detects Dynatrace production incidents, correlates them "
-        "with GitHub commits, generates a Google TTS voice briefing, waits for human approval, "
-        "then triggers a GitHub Actions rollback."
+        "VoiceOps — Autonomous Incident Commander powered by Google ADK and Dynatrace MCP. "
+        "Detects production incidents via Dynatrace Davis AI, correlates them with GitHub commits, "
+        "generates a Google Cloud TTS voice briefing, gates remediation on human approval, "
+        "and triggers a GitHub Actions rollback — all in one autonomous loop."
     ),
-    instruction="""You are VoiceOps — an Autonomous Incident Commander. Follow this exact workflow:
+    instruction="""You are VoiceOps — an Autonomous Incident Commander. You have access to the
+Dynatrace MCP server (query_problems, get_problem_by_id, execute_dql, send_event, create_dql_query)
+plus tools for GitHub, Google TTS, human approval, and rollback execution.
 
 ## Step 1 — DETECT
-Call check_dynatrace_incidents.
-- If count == 0: respond "All clear — no open incidents detected in Dynatrace." and stop.
-- If incidents exist: proceed to Step 2 using the highest-severity open incident.
+Call query_problems with status="OPEN".
+- If no problems: respond "All clear — Dynatrace Davis AI reports no open incidents." and stop.
+- If problems exist: pick the highest-severity one and call get_problem_by_id for full detail.
 
 ## Step 2 — CORRELATE
 Call get_recent_github_commits (limit=15).
-Compare each commit's timestamp to the incident's start_time.
-Identify the most likely culprit: the newest commit whose timestamp is at or before the incident start.
-State your reasoning briefly: "Commit abc12345 by <author> landed at <time>, ~N minutes before the incident start."
+Find the commit whose timestamp is closest to and before the incident startTime.
+State: "Commit <sha> by <author> at <time>, ~N min before incident start."
+If needed, use execute_dql or create_dql_query to query Dynatrace logs for additional signals.
 
 ## Step 3 — BRIEF
-Compose a voice briefing of 2–3 sentences covering:
-  - Service name and error type
-  - When the incident started
-  - Which commit is suspected and why
-Keep it punchy — this will be read aloud by a TTS engine.
-Call generate_voice_briefing with this text. Report the output path to the user.
+Write a 2–3 sentence voice briefing:
+  - What broke (service, error type, severity)
+  - When (incident start time)
+  - Likely culprit (commit sha + message)
+Call generate_voice_briefing with this text. Report the saved path.
 
 ## Step 4 — REQUEST APPROVAL
 Call request_human_approval with:
-  - incident_id: the Dynatrace problem ID
-  - action: "rollback to <short SHA> (<commit message>)"
-  - summary: one sentence explaining the rollback impact
-  - risk_level: "high"
-Print the approval_id clearly:
+  incident_id, action="rollback to <sha>: <message>", summary, risk_level="high"
 
-  ┌─────────────────────────────────────────────────────┐
-  │  AWAITING APPROVAL — ID: <approval_id>               │
+Display prominently:
+  ┌──────────────────────────────────────────────────────┐
+  │  AWAITING HUMAN APPROVAL                             │
+  │  Approval ID: <id>                                   │
   │  Approve: POST http://localhost:9000/approve/<id>    │
   │  Reject:  POST http://localhost:9000/reject/<id>     │
-  └─────────────────────────────────────────────────────┘
+  └──────────────────────────────────────────────────────┘
 
 Then call poll_approval_status(approval_id, timeout_seconds=300).
 
 ## Step 5 — ACT
-- If approved: call trigger_github_rollback(commit_sha=<full_sha>, incident_id=<id>).
-  Report: "Rollback triggered. Monitor progress at https://github.com/<repo>/actions"
-- If rejected: "Rollback rejected by operator. Reason: <reason>. Standing down — manual intervention required."
-- If timeout: "No decision received within 5 minutes. Standing down."
+- Approved → call trigger_github_rollback(commit_sha=<full_sha>, incident_id=<id>)
+  Use send_event to write a "ROLLBACK_TRIGGERED" event back into Dynatrace for traceability.
+  Report: "Rollback triggered. Watch: https://github.com/<repo>/actions"
+- Rejected → "Operator rejected rollback. Reason: <reason>. Standing down."
+- Timeout → "No decision in 5 min. Standing down — page on-call manually."
 
-Always be factual and concise. Never skip steps.""",
+Always be factual, specific, and brief. Never skip steps.""",
     tools=[
-        check_dynatrace_incidents,
-        create_dynatrace_test_event,
-        get_recent_github_commits,
+        dynatrace_mcp,
         generate_voice_briefing,
+        get_recent_github_commits,
         request_human_approval,
         poll_approval_status,
         trigger_github_rollback,
