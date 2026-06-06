@@ -9,7 +9,8 @@ from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 # --- Config ---
 BROKEN = os.getenv("BROKEN", "false").lower() == "true"
 DT_TOKEN = os.getenv("DYNATRACE_PLATFORM_TOKEN", "")
-DT_ENV_URL = os.getenv("DT_ENVIRONMENT_URL", "https://pmn17776.live.dynatrace.com")
+# Platform tokens (dt0s16.*) use apps.dynatrace.com + Bearer auth
+DT_ENV_URL = os.getenv("DT_ENVIRONMENT_URL", "https://pmn17776.apps.dynatrace.com")
 DT_OTLP_ENDPOINT = f"{DT_ENV_URL.rstrip('/')}/api/v2/otlp/v1/traces"
 
 # --- OpenTelemetry setup ---
@@ -17,7 +18,7 @@ provider = TracerProvider()
 if DT_TOKEN:
     exporter = OTLPSpanExporter(
         endpoint=DT_OTLP_ENDPOINT,
-        headers={"Authorization": f"Api-Token {DT_TOKEN}"},
+        headers={"Authorization": f"Bearer {DT_TOKEN}"},
     )
     provider.add_span_processor(BatchSpanProcessor(exporter))
 trace.set_tracer_provider(provider)
