@@ -88,7 +88,7 @@ B) DEEPER SIGNAL via Dynatrace:
    If there are known remediation steps, call find_troubleshooting_guides.
 
 C) PAPER TRAIL:
-   Call create_github_issue with title "INCIDENT [{display_id}]: <problem title>" and a body that includes the incident ID, affected entity, suspect commit(s), DQL findings, and severity.
+   Call create_github_issue with title "INCIDENT [<display_id>]: <problem title>" and a body that includes the incident ID, affected entity, suspect commit(s), DQL findings, and severity.
 
 ═══════════════════════════════════════════════
 STEP 3 — BRIEF
