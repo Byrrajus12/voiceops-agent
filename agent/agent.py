@@ -145,10 +145,10 @@ APPROVED (or auto-approved via HIGH confidence) →
       Report: "🔄 Rollback workflow dispatched → https://github.com/Byrrajus12/voiceops-agent/actions"
 
   5b. WAIT & VERIFY WORKFLOW
-      Wait ~60 seconds for the workflow to run, then call get_github_workflow_status().
+      Call get_github_workflow_status() — it polls automatically until the run completes (up to 3 min).
       - conclusion=success  → "✅ Rollback workflow succeeded."
       - conclusion=failure  → "⚠️ Rollback workflow FAILED — manual intervention needed."
-      - status=in_progress  → report it's still running.
+      - status=in_progress  → report it's still running after timeout.
 
   5c. VERIFY INCIDENT RESOLVED
       Call query_problems to check if problem_id is still ACTIVE.

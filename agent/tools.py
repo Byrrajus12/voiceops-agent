@@ -232,44 +232,51 @@ def trigger_github_rollback(commit_sha: str, incident_id: str) -> dict:
     return {"error": f"GitHub Actions API returned {resp.status_code}: {resp.text[:300]}"}
 
 
-def get_github_workflow_status(workflow_file: str = "rollback.yml") -> dict:
-    """Check the status of the most recent GitHub Actions workflow run.
+def get_github_workflow_status(workflow_file: str = "rollback.yml", wait_for_completion: bool = True) -> dict:
+    """Poll the most recent GitHub Actions workflow run until it completes.
 
-    Call this ~60 seconds after trigger_github_rollback to confirm the rollback
-    workflow completed successfully. Returns conclusion: success|failure|in_progress.
+    Call this after trigger_github_rollback. Polls every 10s for up to 3 minutes.
+    Returns conclusion: success|failure, or status: in_progress if still running after timeout.
     """
     headers = {
         "Authorization": f"Bearer {GITHUB_TOKEN}",
         "Accept": "application/vnd.github.v3+json",
     }
     owner, repo = GITHUB_REPO.split("/", 1)
-    try:
-        resp = requests.get(
-            f"https://api.github.com/repos/{owner}/{repo}/actions/workflows/{workflow_file}/runs",
-            headers=headers,
-            params={"per_page": 1},
-            timeout=30,
-        )
-    except requests.RequestException as e:
-        return {"error": f"Network error: {e}"}
+    deadline = time.time() + 180  # 3 min max
 
-    if resp.status_code != 200:
-        return {"error": f"GitHub API returned {resp.status_code}"}
+    while True:
+        try:
+            resp = requests.get(
+                f"https://api.github.com/repos/{owner}/{repo}/actions/workflows/{workflow_file}/runs",
+                headers=headers,
+                params={"per_page": 1},
+                timeout=30,
+            )
+        except requests.RequestException as e:
+            return {"error": f"Network error: {e}"}
 
-    runs = resp.json().get("workflow_runs", [])
-    if not runs:
-        return {"status": "no_runs", "message": "No workflow runs found"}
+        if resp.status_code != 200:
+            return {"error": f"GitHub API returned {resp.status_code}"}
 
-    run = runs[0]
-    return {
-        "status": run["status"],
-        "conclusion": run["conclusion"],
-        "run_id": run["id"],
-        "html_url": run["html_url"],
-        "created_at": run["created_at"],
-        "head_sha": run["head_sha"][:8],
-        "display": f"{run['status'].upper()} / {run['conclusion'] or 'in progress'}"
-    }
+        runs = resp.json().get("workflow_runs", [])
+        if not runs:
+            return {"status": "no_runs", "message": "No workflow runs found"}
+
+        run = runs[0]
+        if run["status"] == "completed" or not wait_for_completion or time.time() >= deadline:
+            return {
+                "status": run["status"],
+                "conclusion": run["conclusion"],
+                "run_id": run["id"],
+                "html_url": run["html_url"],
+                "created_at": run["created_at"],
+                "head_sha": run["head_sha"][:8],
+                "display": f"{run['status'].upper()} / {run['conclusion'] or 'in progress'}"
+            }
+
+        print(f"[workflow] {run['status']} — polling again in 10s...", flush=True)
+        time.sleep(10)
 
 
 def close_github_issue(issue_number: int, resolution_comment: str) -> dict:
