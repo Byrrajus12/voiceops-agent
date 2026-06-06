@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+
+# Env & secrets
+.env
+*.env
+sa-key.json
+*-key.json
+*.pem
+*.p12
+secrets/
+
+# Google Cloud
+.gcloud/
+application_default_credentials.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Audio output
+*.mp3
+*.wav
+
+# Logs
+*.log
+logs/
+
+# Node
+node_modules/
+
+# Terraform
+*.tfstate
+*.tfstate.backup
+.terraform/
