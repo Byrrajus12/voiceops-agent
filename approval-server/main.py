@@ -113,6 +113,41 @@ async def health():
     return {"status": "ok", "pending_count": sum(1 for v in _pending.values() if v["status"] == "pending")}
 
 
+@app.post("/webhook/vapi")
+async def vapi_webhook(request: Request):
+  """Receive VAPI call events/webhooks.
+
+  Expected payload may include `metadata.incident_id`, `transcript`, or `dtmf`.
+  If the webhook indicates an explicit approval (DTMF '1' or transcript contains 'approve'/'yes'),
+  map that to the existing approval by incident endpoints.
+  """
+  payload = await request.json()
+  metadata = payload.get("metadata") or {}
+  incident_id = metadata.get("incident_id") or payload.get("incident_id")
+  transcript = payload.get("transcript") or payload.get("asr") or ""
+  dtmf = payload.get("dtmf") or payload.get("digits") or ""
+
+  if not incident_id:
+    return {"status": "ignored", "reason": "no incident_id in payload"}
+
+  text = (transcript or "")
+  try:
+    # simple DTMF/ASR matching: accept '1', or words 'approve'/'yes'
+    if str(dtmf).strip() == "1" or any(w in text.lower() for w in ("approve", "yes", "confirm")):
+      # call existing helper to approve by incident
+      await approve_by_incident(incident_id, reason="voice_approved")
+      return {"status": "approved", "incident_id": incident_id}
+
+    if str(dtmf).strip() == "2" or any(w in text.lower() for w in ("reject", "no", "deny")):
+      await reject_by_incident(incident_id, reason="voice_rejected")
+      return {"status": "rejected", "incident_id": incident_id}
+
+    return {"status": "ignored", "incident_id": incident_id, "note": "no approval keywords detected"}
+  except HTTPException as e:
+    # propagate HTTP errors as JSON
+    return {"status": "error", "detail": str(e.detail)}
+
+
 # ── Browser UI ─────────────────────────────────────────────────
 
 @app.get("/", response_class=HTMLResponse)

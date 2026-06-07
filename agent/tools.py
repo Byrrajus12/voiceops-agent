@@ -12,6 +12,11 @@ import requests
 GITHUB_TOKEN = os.getenv("GITHUB_PAT", "")
 GITHUB_REPO = os.getenv("GITHUB_REPO", "Byrrajus12/voiceops-agent")
 APPROVAL_SERVER = os.getenv("APPROVAL_SERVER_URL", "http://localhost:9000")
+VAPI_API_KEY = os.getenv("VAPI_API_KEY", "")
+VAPI_PHONE_NUMBER_ID = os.getenv("VAPI_PHONE_NUMBER_ID", "")
+VAPI_ASSISTANT_ID = os.getenv("VAPI_ASSISTANT_ID", "")
+VAPI_WEBHOOK_URL = os.getenv("VAPI_WEBHOOK_URL", "")
+VAPI_CALLER_NUMBER = os.getenv("VAPI_CALLER_NUMBER", "")
 
 
 def get_recent_github_commits(limit: int = 10) -> dict:
@@ -230,6 +235,66 @@ def trigger_github_rollback(commit_sha: str, incident_id: str) -> dict:
     if resp.status_code == 422:
         return {"error": f"Invalid dispatch inputs: {resp.text[:300]}"}
     return {"error": f"GitHub Actions API returned {resp.status_code}: {resp.text[:300]}"}
+
+
+def place_voice_call(briefing_text: str, to_number: str | None = None, incident_id: str | None = None) -> dict:
+    """Initiate an outbound phone call via VAPI.
+
+    Attempts to create a call using VAPI and instruct the assistant to play the briefing
+    and ask for an approval phrase (e.g., "approve"). If VAPI credentials are missing or
+    the API call fails, falls back to `generate_voice_briefing` (TTS to file) and returns
+    the path to the transcript or audio.
+    """
+    if not VAPI_API_KEY or not VAPI_PHONE_NUMBER_ID or not VAPI_ASSISTANT_ID:
+        # Missing credentials — fallback to TTS transcript/audio
+        fallback_path = "/tmp/incident_briefing.txt"
+        try:
+            # attempt normal TTS mp3 generation first
+            tts_result = generate_voice_briefing(briefing_text)
+            return {"status": "vapi_unavailable", "reason": "missing_credentials", "fallback": tts_result}
+        except Exception:
+            with open(fallback_path, "w") as f:
+                f.write(briefing_text)
+            return {"status": "vapi_unavailable", "reason": "missing_credentials", "path": fallback_path}
+
+    payload = {
+        "phoneNumberId": VAPI_PHONE_NUMBER_ID,
+        "assistantId": VAPI_ASSISTANT_ID,
+        "customer": {"number": to_number or os.getenv("YOUR_PHONE_NUMBER")},
+        "assistantOverrides": {
+            "firstMessage": briefing_text,
+        },
+        "metadata": {},
+    }
+    if incident_id:
+        payload["metadata"]["incident_id"] = incident_id
+
+    headers = {
+        "Authorization": f"Bearer {VAPI_API_KEY}",
+        "Content-Type": "application/json",
+    }
+
+    try:
+        resp = requests.post("https://api.vapi.ai/call/phone", headers=headers, json=payload, timeout=30)
+    except requests.RequestException as e:
+        # network error — fallback to TTS
+        tts_result = generate_voice_briefing(briefing_text)
+        return {"status": "error", "error": f"Network error contacting VAPI: {e}", "fallback": tts_result}
+
+    if resp.status_code in (200, 201, 202, 204):
+        try:
+            data = resp.json()
+        except Exception:
+            data = {"raw_text": resp.text}
+        return {"status": "triggered", "vapi_status": resp.status_code, "response": data}
+
+    # Non-success from VAPI — fallback
+    try:
+        body = resp.json()
+    except Exception:
+        body = {"text": resp.text}
+    tts_result = generate_voice_briefing(briefing_text)
+    return {"status": "error", "vapi_status": resp.status_code, "vapi_response": body, "fallback": tts_result}
 
 
 def get_github_workflow_status(workflow_file: str = "rollback.yml", wait_for_completion: bool = True) -> dict:
