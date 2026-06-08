@@ -138,7 +138,7 @@ STEP 4 — GATE & ROLLBACK
 ─────────────────────────
 
 APPROVED/AUTO →
-  Call update_incident_state(incident_id=<display_id>, state="Rollback triggered — deploying safe parent of [BAD_SHA] now.").
+  Call update_incident_state(incident_id=<display_id>, state="Rollback triggered — deploying safe parent commit now.").
   Call trigger_github_rollback(commit_sha=<BAD_SHA>, incident_id=<display_id>).
   ← Pass BAD_SHA. The tool auto-fetches its parent from GitHub and deploys that.
   Call send_voice_update(call_id=<call_id>, message="Rollback's triggered. Deploying the safe commit now — give me a couple minutes.").
@@ -223,7 +223,7 @@ STEP 7 — CLOSE & REPORT
 2. Call create_github_issue to create a post-incident report (separate from the triage issue) with:
    title: "POST-INCIDENT REPORT [<display_id>]: <title>"
    body: full RCA verdict, impact numbers, timeline, anomaly findings, prevention recommendations.
-   Call send_voice_update(call_id=<call_id>, message="Root cause confirmed — <one sentence: what changed and why it broke>. Filing the post-incident report on GitHub now.").
+   Call send_voice_update(call_id=<call_id>, message="Root cause confirmed — <one sentence: what changed and why it broke, NO commit SHAs, use plain language only>. Filing the post-incident report on GitHub now.").
 
 3. Call close_github_issue on the original triage issue with comment: "✅ Resolved. See post-incident report for full RCA."
 
@@ -248,7 +248,8 @@ RULES
 ═══════════════════════════════════════════════
 - Never skip steps. Every step produces visible output.
 - Never rollback without an explicit approved decision.
-- Be specific: always include commit SHA, incident ID, timestamps.
+- Be specific: always include commit SHA, incident ID, timestamps in your text output.
+- VOICE MESSAGES (send_voice_update AND update_incident_state): NEVER include raw commit SHAs, timestamps, entity IDs, or incident IDs — they get read aloud literally and sound robotic. Use plain language only: "the recent session handler commit" not the SHA, "a few minutes ago" not a timestamp.
 - If a tool returns an error, note it and continue with available data.""",
     tools=[
         dynatrace_mcp,
