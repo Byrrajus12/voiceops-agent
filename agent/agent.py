@@ -14,6 +14,7 @@ from agent.tools import (  # noqa: E402
     generate_voice_briefing,
     get_commit_diff,
     place_voice_call,
+    send_voice_update,
     get_github_workflow_status,
     get_recent_github_commits,
     poll_approval_status,
@@ -65,7 +66,7 @@ You have access to:
   get_entity_id, ask_dynatrace_docs, find_troubleshooting_guides, adaptive_anomaly_detector
 - GitHub tools: get_recent_github_commits, get_commit_diff, create_github_issue,
   trigger_github_rollback, get_github_workflow_status, close_github_issue
-- Ops tools: place_voice_call, generate_voice_briefing, request_human_approval, poll_approval_status
+- Ops tools: place_voice_call, send_voice_update, generate_voice_briefing, request_human_approval, poll_approval_status
 
 PRIORITY: MITIGATE FIRST. Stop the bleeding before investigating. RCA and impact analysis happen
 AFTER the service is restored — never block remediation waiting for analysis.
@@ -95,21 +96,24 @@ Output: "⚡ Quick triage: suspect commit <sha> by <author>, <N> min before inci
 
 STEP 3 — ALERT BRIEF (voice)
 ─────────────────────────────
-Write a 3-sentence briefing:
-  "VoiceOps alert. [Severity] incident [display_id] on [entity] since [time] UTC.
-   Suspect: commit [sha] by [author]. [Confidence]-confidence rollback ready."
+Build the incident context string (this is injected as hidden context, NOT spoken aloud):
+  "Incident [display_id] — [severity] on [entity] since [time] UTC.
+   Suspect commit: [sha] by [author], [N] min before incident. Confidence: [level].
+   Action: rollback to [sha]."
 
 Branch on confidence:
 
-HIGH → Call place_voice_call with the briefing text and incident_id=<display_id> only.
+HIGH → Call place_voice_call with briefing_text=<context string>, incident_id=<display_id>.
        No phone number — it is configured server-side.
+       Save the call_id from the result (result["call_id"]) — you'll use it for send_voice_update.
        Go directly to trigger_github_rollback after the call.
 
 MEDIUM/LOW → Create the approval FIRST so the voice webhook can resolve it:
   1. Call request_human_approval(incident_id, action, summary, risk_level="high", confidence=<level>).
      Save the returned approval_id.
-  2. Call place_voice_call with briefing_text, incident_id=<display_id>, and approval_id=<approval_id>.
+  2. Call place_voice_call with briefing_text=<context string>, incident_id=<display_id>, approval_id=<approval_id>.
      Do not pass a phone number.
+     Save the call_id from the result (result["call_id"]).
   3. Display the approval gate:
   ┌──────────────────────────────────────────────────────────────────┐
   │  ⚠️  HUMAN APPROVAL REQUIRED                                     │
@@ -120,15 +124,20 @@ MEDIUM/LOW → Create the approval FIRST so the voice webhook can resolve it:
   │  Reject    : POST {_APPROVAL_SERVER_URL}/reject/<approval_id>    │
   └──────────────────────────────────────────────────────────────────┘
   4. Call poll_approval_status(approval_id, timeout_seconds=300).
+     The call stays open while you wait — the operator is still on the line.
 
 STEP 4 — GATE & ROLLBACK
 ─────────────────────────
 
-APPROVED/AUTO → Call trigger_github_rollback(commit_sha=<FULL sha>, incident_id=<display_id>).
+APPROVED/AUTO →
+  Call send_voice_update(call_id, "Triggering the rollback now, stay on the line.") if call_id is set.
+  Call trigger_github_rollback(commit_sha=<FULL sha>, incident_id=<display_id>).
   Report: "🔄 Rollback dispatched → https://github.com/Byrrajus12/voiceops-agent/actions"
   Call get_github_workflow_status() — polls until complete.
-  - success → "✅ Rollback succeeded."
-  - failure → "⚠️ Rollback FAILED — manual intervention needed. Stopping."
+  - success → Call send_voice_update(call_id, "Rollback's deployed, health check passed. Service is back up.") if call_id is set.
+              "✅ Rollback succeeded."
+  - failure → Call send_voice_update(call_id, "Rollback workflow failed — I need to look at this manually.") if call_id is set.
+              "⚠️ Rollback FAILED — manual intervention needed. Stopping."
 
 STEP 4b — CONFIRM RESOLUTION
   Dynatrace takes 3–5 minutes after a deploy to re-run its synthetic monitor and close the problem.
@@ -195,17 +204,19 @@ Output:
 
 STEP 7 — CLOSE & REPORT
 ─────────────────────────
-Generate a resolution voice briefing:
-  "Incident [display_id] resolved. Rollback to [sha] succeeded. [N] requests were affected
-   over [N] minutes. Root cause was [commit message]. Service is healthy."
-Call place_voice_call with the resolution briefing only — do not pass a phone number, it is configured server-side.
+1. If call_id is set, push the RCA summary:
+   Call send_voice_update(call_id,
+     "RCA done — [one sentence: what the commit changed and why it caused the issue]. Filing the report on GitHub now.")
 
-Call create_github_issue to create a post-incident report (separate from the triage issue) with:
-  title: "POST-INCIDENT REPORT [<display_id>]: <title>"
-  body: full RCA verdict, impact numbers, timeline, anomaly findings, prevention recommendations.
+2. Call create_github_issue to create a post-incident report (separate from the triage issue) with:
+   title: "POST-INCIDENT REPORT [<display_id>]: <title>"
+   body: full RCA verdict, impact numbers, timeline, anomaly findings, prevention recommendations.
 
-Call close_github_issue on the original triage issue (from Step 1 if re-opened, or the issue number
-you tracked) with comment: "✅ Resolved. See post-incident report for full RCA."
+3. Call close_github_issue on the original triage issue with comment: "✅ Resolved. See post-incident report for full RCA."
+
+4. If call_id is set, send the wrap-up:
+   Call send_voice_update(call_id, "All wrapped up. Post-incident report is on GitHub. We're good.")
+   (The VAPI assistant wraps up the conversation naturally — no need to initiate a second call.)
 
 Print final summary:
 ┌────────────────────────────────────────────────────────┐
@@ -232,6 +243,7 @@ RULES
         create_github_issue,
         generate_voice_briefing,
         place_voice_call,
+        send_voice_update,
         request_human_approval,
         poll_approval_status,
         trigger_github_rollback,

@@ -343,7 +343,14 @@ def place_voice_call(
         "phoneNumberId": VAPI_PHONE_NUMBER_ID,
         "assistantId": VAPI_ASSISTANT_ID,
         "customer": {"number": to_number or VAPI_CALLER_NUMBER},
-        "assistantOverrides": {"firstMessage": briefing_text},
+        "assistantOverrides": {
+            "firstMessage": "Hey, VoiceOps here.",
+            "model": {
+                # Hidden context injected before the call starts — VAPI LLM reads this,
+                # speaks about the incident naturally, not as a literal recitation
+                "messages": [{"role": "system", "content": briefing_text}]
+            },
+        },
         "metadata": metadata,
     }
 
@@ -390,6 +397,34 @@ def place_voice_call(
         }
 
     return result
+
+
+def send_voice_update(call_id: str, message: str) -> dict:
+    """Push a milestone update into an active VAPI call mid-conversation.
+
+    VAPI incorporates the message naturally in the assistant's voice — not a literal readout.
+    Call this after: rollback triggered, rollback done, RCA complete, issue filed.
+    If the call has already ended, this returns an error — that's fine, continue the workflow.
+    """
+    if not VAPI_API_KEY:
+        return {"status": "skipped", "reason": "no VAPI_API_KEY"}
+
+    headers = {
+        "Authorization": f"Bearer {VAPI_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    try:
+        resp = requests.post(
+            f"https://api.vapi.ai/call/{call_id}/message",
+            headers=headers,
+            json={"role": "system", "content": message},
+            timeout=10,
+        )
+        if resp.status_code in (200, 201, 204):
+            return {"status": "sent", "call_id": call_id}
+        return {"status": "error", "code": resp.status_code, "detail": resp.text[:200]}
+    except requests.RequestException as e:
+        return {"status": "error", "error": str(e)}
 
 
 def get_github_workflow_status(workflow_file: str = "rollback.yml", wait_for_completion: bool = True) -> dict:

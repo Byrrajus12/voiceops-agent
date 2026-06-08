@@ -10,6 +10,7 @@ app = FastAPI(title="VoiceOps Approval Server")
 
 _pending: dict[str, dict] = {}
 _decisions: dict[str, dict] = {}
+_incident_state: dict[str, str] = {}  # incident_id → last known agent activity text
 
 
 class ApprovalRequest(BaseModel):
@@ -111,6 +112,108 @@ async def list_all():
 @app.get("/health")
 async def health():
     return {"status": "ok", "pending_count": sum(1 for v in _pending.values() if v["status"] == "pending")}
+
+
+@app.post("/incident/{incident_id}/state")
+async def update_incident_state(incident_id: str, request: Request):
+    """ADK agent posts here to update what it's currently doing — used by VAPI tool."""
+    body = await request.json()
+    _incident_state[incident_id] = body.get("state", "")
+    return {"status": "ok"}
+
+
+def _extract_call_context(body: dict) -> tuple[str, str]:
+    """Pull incident_id and approval_id from a VAPI function-call payload.
+
+    VAPI includes message.call.metadata (what we stored via place_voice_call) in
+    all function-call events, so we don't need the LLM to pass IDs as parameters.
+    """
+    message = body.get("message") or body
+    call = message.get("call") or body.get("call") or {}
+    metadata = call.get("metadata") or {}
+    incident_id = (
+        metadata.get("incident_id")
+        or (body.get("parameters") or {}).get("incident_id")
+        or body.get("incident_id")
+    )
+    approval_id = (
+        metadata.get("approval_id")
+        or (body.get("parameters") or {}).get("approval_id")
+        or body.get("approval_id")
+    )
+    return incident_id or "", approval_id or ""
+
+
+@app.post("/vapi/tool/get_incident_status")
+async def vapi_tool_get_incident_status(request: Request):
+    """VAPI function tool — operator asked what's happening mid-call."""
+    body = await request.json()
+    incident_id, _ = _extract_call_context(body)
+
+    if not incident_id:
+        return {"result": "No incident ID in call context."}
+
+    match = next((v for v in _pending.values() if v["incident_id"] == incident_id), None)
+    state_text = _incident_state.get(incident_id, "")
+
+    if not match:
+        result = state_text or "No active approval request found."
+    elif match["status"] == "pending":
+        result = f"Waiting on your go-ahead for the rollback. {state_text}".strip()
+    elif match["status"] == "approved":
+        result = f"Rollback approved and in progress. {state_text}".strip()
+    elif match["status"] == "rejected":
+        result = "Rollback was rejected. Standing down."
+    else:
+        result = state_text or "Incident response in progress."
+
+    return {"result": result}
+
+
+@app.post("/vapi/tool/approve_rollback")
+async def vapi_tool_approve_rollback(request: Request):
+    """VAPI function tool — operator approved the rollback mid-call.
+
+    VAPI LLM calls this when the operator expresses approval in natural language.
+    Fires during the active call so poll_approval_status resolves immediately.
+    """
+    body = await request.json()
+    incident_id, approval_id = _extract_call_context(body)
+
+    try:
+        if approval_id:
+            await approve(approval_id, reason="voice_approved")
+        elif incident_id:
+            await approve_by_incident(incident_id, reason="voice_approved")
+        else:
+            return {"result": "Couldn't find the approval request — check the dashboard to approve manually."}
+    except HTTPException as e:
+        if "Already decided" in str(e.detail):
+            return {"result": "Already approved — rollback is in progress."}
+        return {"result": f"Approval error: {e.detail}"}
+
+    return {"result": "Got it — triggering the rollback now."}
+
+
+@app.post("/vapi/tool/reject_rollback")
+async def vapi_tool_reject_rollback(request: Request):
+    """VAPI function tool — operator rejected the rollback mid-call."""
+    body = await request.json()
+    incident_id, approval_id = _extract_call_context(body)
+
+    try:
+        if approval_id:
+            await reject(approval_id, reason="voice_rejected")
+        elif incident_id:
+            await reject_by_incident(incident_id, reason="voice_rejected")
+        else:
+            return {"result": "Couldn't find the approval request."}
+    except HTTPException as e:
+        if "Already decided" in str(e.detail):
+            return {"result": "Already decided — standing down."}
+        return {"result": f"Error: {e.detail}"}
+
+    return {"result": "Understood — standing down on the rollback."}
 
 
 @app.post("/webhook/vapi")
