@@ -28,6 +28,9 @@ application_default_credentials.json
 *.swo
 .DS_Store
 
+# Session test data (may contain personal info)
+agent/test-data/
+
 # Audio output
 *.mp3
 *.wav
