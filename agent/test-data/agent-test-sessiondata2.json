@@ -1,0 +1,1555 @@
+{
+  "id": "225ceb61-c750-4e94-b1a0-2b34158673bb",
+  "appName": "agent",
+  "userId": "user",
+  "state": {
+    "__session_metadata__": {
+      "displayName": " Check for active incidents and run the full in..."
+    }
+  },
+  "events": [
+    {
+      "content": {
+        "parts": [
+          {
+            "text": " Check for active incidents and run the full incident response workflow."
+          }
+        ],
+        "role": "user"
+      },
+      "invocationId": "e-85523be7-d58d-45fc-ade3-66d491cb18fd",
+      "author": "user",
+      "actions": {
+        "stateDelta": {},
+        "artifactDelta": {},
+        "requestedAuthConfigs": {},
+        "requestedToolConfirmations": {}
+      },
+      "nodeInfo": {
+        "path": ""
+      },
+      "id": "9ea8e2b4-c856-4406-91e6-2c82295a5a1f",
+      "timestamp": 1780875535.2077365
+    },
+    {
+      "modelVersion": "gemini-2.5-flash",
+      "content": {
+        "parts": [
+          {
+            "functionCall": {
+              "id": "adk-bf1bdd9e-bbeb-4722-a83e-b08ace7ae4cd",
+              "args": {
+                "status": "ACTIVE"
+              },
+              "name": "query-problems"
+            },
+            "thoughtSignature": "CvgBAY89a1_iA99PAxq-u4G-m7uvATC58XTyEXzbJIW-uJO5OhdyJmkJWt5BM5bVIi3KsqBGabVk-ShkcqyOgtxPRmpr9fCYlbRVl_epdDNp6Vm9UGaEdZEvV-P4v_yZVVRqDkK7Yao2gnO-PnjNNgJpASknZA4KjjF_KVIGZNXSH9H6NkY899oK4eLlUkj0SqddCt6Hf899t-91dsvTgoXuY6fGw5AtEiSSQuoQBVPbYmksWVnB5Nfqxu-wV-Fy7IjppwtaTDwbJEokVrGIBtz79JzjhTzCdHoQC3LJKI5ECp2y_4cre_7Y2O74y8_jVaWB6iLKxNOwV5A="
+          }
+        ],
+        "role": "model"
+      },
+      "finishReason": "STOP",
+      "usageMetadata": {
+        "candidatesTokenCount": 5,
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 5
+          }
+        ],
+        "promptTokenCount": 3018,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 3018
+          }
+        ],
+        "thoughtsTokenCount": 46,
+        "totalTokenCount": 3069,
+        "trafficType": "ON_DEMAND"
+      },
+      "avgLogprobs": -1.6495935440063476,
+      "invocationId": "e-85523be7-d58d-45fc-ade3-66d491cb18fd",
+      "author": "incident_commander",
+      "actions": {
+        "stateDelta": {},
+        "artifactDelta": {},
+        "requestedAuthConfigs": {},
+        "requestedToolConfirmations": {}
+      },
+      "nodeInfo": {
+        "path": "incident_commander@1"
+      },
+      "longRunningToolIds": [],
+      "id": "302ba7b2-08e9-480e-970b-2f8a2c329da6",
+      "timestamp": 1780875536.461666
+    },
+    {
+      "content": {
+        "parts": [
+          {
+            "functionResponse": {
+              "id": "adk-bf1bdd9e-bbeb-4722-a83e-b08ace7ae4cd",
+              "name": "query-problems",
+              "response": {
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Query metadata:\n{\n  \"grail\" : {\n    \"canonicalQuery\" : \"fetch dt.davis.problems, from:now() - 2h\\n| fields event.id, display_id, event.status, event.start, event.end, event.category, event.description, affected_entity_ids, related_entity_ids\\n| filter if(\\\"ACTIVE\\\" == \\\"ALL\\\", TRUE, else:event.status == \\\"ACTIVE\\\")\\n| sort event.start\\n| limit 200\",\n    \"timezone\" : \"Z\",\n    \"query\" : \"fetch dt.davis.problems, from:now()-2h\\n| fields event.id, display_id, event.status, event.start, event.end, event.category, event.description, affected_entity_ids, related_entity_ids\\n| filter if(\\\"ACTIVE\\\" == \\\"ALL\\\", true, else:event.status == \\\"ACTIVE\\\")\\n| sort event.start\\n| limit 200\\n\",\n    \"scannedRecords\" : 344,\n    \"dqlVersion\" : \"V1_0\",\n    \"scannedBytes\" : 745842,\n    \"scannedDataPoints\" : 0,\n    \"analysisTimeframe\" : {\n      \"start\" : \"2026-06-07T21:38:57.625285216Z\",\n      \"end\" : \"2026-06-07T23:38:57.625285216Z\"\n    },\n    \"locale\" : \"und\",\n    \"executionTimeMilliseconds\" : 44,\n    \"notifications\" : [ {\n      \"severity\" : \"WARNING\",\n      \"messageFormat\" : \"The expression `%1$s` is always false because the  two arguments of %2$s are not equal.\",\n      \"syntaxPosition\" : {\n        \"start\" : {\n          \"column\" : 13,\n          \"index\" : 195,\n          \"line\" : 3\n        },\n        \"end\" : {\n          \"column\" : 29,\n          \"index\" : 211,\n          \"line\" : 3\n        }\n      },\n      \"messageFormatSpecifierTypes\" : [ \"INPUT_QUERY_PART\", \"OPERATOR\" ],\n      \"arguments\" : [ \"\\\"ACTIVE\\\" == \\\"ALL\\\"\", \"==\" ],\n      \"notificationType\" : \"EXPRESSION_ALWAYS_FALSE_EQUALS\",\n      \"message\" : \"The expression `\\\"ACTIVE\\\" == \\\"ALL\\\"` is always false because the  two arguments of == are not equal.\"\n    } ],\n    \"queryId\" : \"2fe40750-2952-43e2-bc68-401b8f689cfb\",\n    \"sampled\" : false\n  },\n  \"metrics\" : [ ]\n}"
+                  },
+                  {
+                    "type": "text",
+                    "text": "Grail types for the records in the query result:\n[ {\n  \"mappings\" : {\n    \"event.id\" : {\n      \"type\" : \"string\",\n      \"types\" : [ ]\n    },\n    \"display_id\" : {\n      \"type\" : \"string\",\n      \"types\" : [ ]\n    },\n    \"event.status\" : {\n      \"type\" : \"string\",\n      \"types\" : [ ]\n    },\n    \"event.start\" : {\n      \"type\" : \"timestamp\",\n      \"types\" : [ ]\n    },\n    \"event.end\" : {\n      \"type\" : \"undefined\",\n      \"types\" : [ ]\n    },\n    \"event.category\" : {\n      \"type\" : \"string\",\n      \"types\" : [ ]\n    },\n    \"event.description\" : {\n      \"type\" : \"string\",\n      \"types\" : [ ]\n    },\n    \"affected_entity_ids\" : {\n      \"type\" : \"array\",\n      \"types\" : [ {\n        \"mappings\" : {\n          \"element\" : {\n            \"type\" : \"string\",\n            \"types\" : [ ]\n          }\n        },\n        \"indexRange\" : [ 0, 0 ]\n      } ]\n    },\n    \"related_entity_ids\" : {\n      \"type\" : \"undefined\",\n      \"types\" : [ ]\n    }\n  },\n  \"indexRange\" : [ 0, 0 ]\n} ]"
+                  },
+                  {
+                    "type": "text",
+                    "text": "Query result records:\n[ {\n  \"event.id\" : \"6664738189000279457_1780872499297V2\",\n  \"display_id\" : \"P-26062\",\n  \"event.status\" : \"ACTIVE\",\n  \"event.start\" : \"2026-06-07T22:48:19.297000000Z\",\n  \"event.category\" : \"AVAILABILITY\",\n  \"event.description\" : \"# Http monitor global outage\\n\\nThe problem **affects 1 entity** overall.\\n\\nFollowing entities were affected by the problem:\\n\\n**HTTP monitor, VoiceOps Target - Session Errors**\\n\\nAvailability: Http monitor global outage\\n\\n- Http monitor global outage of VoiceOps Target \\\\- Session Errors synthetic monitor configured in 1 location\\n|Location|Step|Failure details|\\n|:--|:--|:--|\\n|Iowa|1|Response status code rules violated, 500: Internal server error \\\\(500\\\\)|\",\n  \"affected_entity_ids\" : [ \"HTTP_CHECK-60120072A272FB3C\" ]\n} ]"
+                  }
+                ],
+                "structuredContent": {
+                  "records": [
+                    {
+                      "event.id": "6664738189000279457_1780872499297V2",
+                      "display_id": "P-26062",
+                      "event.status": "ACTIVE",
+                      "event.start": "2026-06-07T22:48:19.297000000Z",
+                      "event.category": "AVAILABILITY",
+                      "event.description": "# Http monitor global outage\n\nThe problem **affects 1 entity** overall.\n\nFollowing entities were affected by the problem:\n\n**HTTP monitor, VoiceOps Target - Session Errors**\n\nAvailability: Http monitor global outage\n\n- Http monitor global outage of VoiceOps Target \\- Session Errors synthetic monitor configured in 1 location\n|Location|Step|Failure details|\n|:--|:--|:--|\n|Iowa|1|Response status code rules violated, 500: Internal server error \\(500\\)|",
+                      "affected_entity_ids": [
+                        "HTTP_CHECK-60120072A272FB3C"
+                      ]
+                    }
+                  ],
+                  "metadata": {
+                    "grail": {
+                      "canonicalQuery": "fetch dt.davis.problems, from:now() - 2h\n| fields event.id, display_id, event.status, event.start, event.end, event.category, event.description, affected_entity_ids, related_entity_ids\n| filter if(\"ACTIVE\" == \"ALL\", TRUE, else:event.status == \"ACTIVE\")\n| sort event.start\n| limit 200",
+                      "timezone": "Z",
+                      "query": "fetch dt.davis.problems, from:now()-2h\n| fields event.id, display_id, event.status, event.start, event.end, event.category, event.description, affected_entity_ids, related_entity_ids\n| filter if(\"ACTIVE\" == \"ALL\", true, else:event.status == \"ACTIVE\")\n| sort event.start\n| limit 200\n",
+                      "scannedRecords": 344,
+                      "dqlVersion": "V1_0",
+                      "scannedBytes": 745842,
+                      "scannedDataPoints": 0,
+                      "analysisTimeframe": {
+                        "start": 1780868337.6252851,
+                        "end": 1780875537.6252851
+                      },
+                      "locale": "und",
+                      "executionTimeMilliseconds": 44,
+                      "notifications": [
+                        {
+                          "severity": "WARNING",
+                          "messageFormat": "The expression `%1$s` is always false because the  two arguments of %2$s are not equal.",
+                          "syntaxPosition": {
+                            "start": {
+                              "column": 13,
+                              "index": 195,
+                              "line": 3
+                            },
+                            "end": {
+                              "column": 29,
+                              "index": 211,
+                              "line": 3
+                            }
+                          },
+                          "messageFormatSpecifierTypes": [
+                            "INPUT_QUERY_PART",
+                            "OPERATOR"
+                          ],
+                          "arguments": [
+                            "\"ACTIVE\" == \"ALL\"",
+                            "=="
+                          ],
+                          "notificationType": "EXPRESSION_ALWAYS_FALSE_EQUALS",
+                          "message": "The expression `\"ACTIVE\" == \"ALL\"` is always false because the  two arguments of == are not equal."
+                        }
+                      ],
+                      "queryId": "2fe40750-2952-43e2-bc68-401b8f689cfb",
+                      "sampled": false
+                    },
+                    "metrics": []
+                  },
+                  "types": [
+                    {
+                      "mappings": {
+                        "event.id": {
+                          "type": "string",
+                          "types": []
+                        },
+                        "display_id": {
+                          "type": "string",
+                          "types": []
+                        },
+                        "event.status": {
+                          "type": "string",
+                          "types": []
+                        },
+                        "event.start": {
+                          "type": "timestamp",
+                          "types": []
+                        },
+                        "event.end": {
+                          "type": "undefined",
+                          "types": []
+                        },
+                        "event.category": {
+                          "type": "string",
+                          "types": []
+                        },
+                        "event.description": {
+                          "type": "string",
+                          "types": []
+                        },
+                        "affected_entity_ids": {
+                          "type": "array",
+                          "types": [
+                            {
+                              "mappings": {
+                                "element": {
+                                  "type": "string",
+                                  "types": []
+                                }
+                              },
+                              "indexRange": [
+                                0,
+                                0
+                              ]
+                            }
+                          ]
+                        },
+                        "related_entity_ids": {
+                          "type": "undefined",
+                          "types": []
+                        }
+                      },
+                      "indexRange": [
+                        0,
+                        0
+                      ]
+                    }
+                  ]
+                },
+                "isError": false
+              }
+            }
+          }
+        ],
+        "role": "user"
+      },
+      "invocationId": "e-85523be7-d58d-45fc-ade3-66d491cb18fd",
+      "author": "incident_commander",
+      "actions": {
+        "stateDelta": {},
+        "artifactDelta": {},
+        "requestedAuthConfigs": {},
+        "requestedToolConfirmations": {},
+        "renderUiWidgets": [
+          {
+            "id": "adk-bf1bdd9e-bbeb-4722-a83e-b08ace7ae4cd",
+            "provider": "mcp",
+            "payload": {
+              "resource_uri": "ui://visualizeGrailResults.html",
+              "tool": {
+                "name": "query-problems",
+                "title": "Root Cause Agent",
+                "description": "Query all Davis Problems.\nWhen querying Davis problems, it's important to understand their lifecycle and how to filter results effectively.\nWithin a problem lifecycle, each problem has a start time. If the end time is not set, the problem is considered ACTIVE. Once an end time is defined, the problem is considered CLOSED.\nOnly the 200 most recent problems are returned.\n",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "includeTypes": {
+                      "type": "boolean",
+                      "description": "If true the DQL query result types will be included in the result. Default value is true."
+                    },
+                    "history": {
+                      "description": "Specifies the time range in minutes (m), hours (h), or days (d) to look back when querying Davis problems:\nproblems with a timestamp in the range [now-history, now] are returned.\nInteger hours to look back from now (e.g., 30m = last half an hour, 5h = last 5 hours, 2d = last 2 days, 7d = last week)\n**DO NOT** use values greater than 60 days unless explicitly requested by the user.\n",
+                      "type": "string"
+                    },
+                    "status": {
+                      "description": "the status of the problem to query. The value can be one of the following values:\nACTIVE, CLOSED or ALL.\nIf ALL is provided then both ACTIVE and CLOSED problems are returned.\nThe default value is ALL\n",
+                      "type": "string"
+                    }
+                  },
+                  "required": [],
+                  "additionalProperties": false
+                },
+                "outputSchema": {
+                  "description": "Result of executing a DQL query against Dynatrace Grail",
+                  "properties": {
+                    "records": {
+                      "description": "The records returned by the DQL query.",
+                      "type": "array",
+                      "items": {
+                        "additionalProperties": true,
+                        "type": "object"
+                      }
+                    },
+                    "types": {
+                      "description": "The types for the records returned by the DQL query.",
+                      "type": "array",
+                      "items": {
+                        "additionalProperties": true,
+                        "type": "object"
+                      },
+                      "annotations": {
+                        "audience": [
+                          "user"
+                        ]
+                      }
+                    },
+                    "metadata": {
+                      "description": "Metadata about the query execution and results from Grail",
+                      "type": "object",
+                      "annotations": {
+                        "audience": [
+                          "user"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "records"
+                  ],
+                  "title": "Grail DQL Query Result",
+                  "type": "object",
+                  "x-content-type": "application/x-grail-query-result"
+                },
+                "annotations": {
+                  "title": "Root Cause Agent",
+                  "readOnlyHint": true,
+                  "destructiveHint": false,
+                  "idempotentHint": false,
+                  "openWorldHint": false,
+                  "returnDirect": true
+                },
+                "_meta": {
+                  "ui": {
+                    "resourceUri": "ui://visualizeGrailResults.html"
+                  },
+                  "customerFacingDescription": "Explore the 200 most recent problems, active or closed."
+                }
+              },
+              "tool_args": {
+                "status": "ACTIVE"
+              }
+            }
+          }
+        ]
+      },
+      "nodeInfo": {
+        "path": "incident_commander@1"
+      },
+      "id": "991d320d-986f-4783-9c3f-717dd20e72ce",
+      "timestamp": 1780875537.7372391
+    },
+    {
+      "modelVersion": "gemini-2.5-flash",
+      "content": {
+        "parts": [
+          {
+            "functionCall": {
+              "id": "adk-6472bd7b-dc27-4f7d-85c1-0611d879c66f",
+              "args": {
+                "problemId": "6664738189000279457_1780872499297V2"
+              },
+              "name": "get-problem-by-id"
+            },
+            "thoughtSignature": "Cq8LAY89a1-9s1bs8G55Dw3AuuGwLy-DwiH5-YmDoXTrsdIkQ9JQDpzIhuOz-xR5ctrxVvM663o3Vhqie6hl00KzBDypGitZYFyTvN_6tIR6bjzQj536iuwB8jZj1YP3-dqkaX9XUgtE08_cNToZepCclO2hW2g2I5a0TAPvlGq4l4o_pSRl7MyJs_KcbYtyAmB8VZYoa2cs88-GBkxzw1sNfmzNj1OYkMWsGSgR83V8nMN75zxpDpoe5y8oiwRHUppc7A8KhzEHVkc_HI6XRaaw7DkrrFBL_I0FWRyyPUMsI_wAyd1VOPKPVTvm-XWidzyzrifKgnmcco2bj5TjTSeAMMjFeenuHppaKJ3KnGpKRzGY_bQxq68EMbtUBzNF-8XeOQ2WIwfexD4x3xOVQvT4kNLMKQtvTZes375QjTIJLTxiK4WV3a4172vol3i-q4hHbPhROpdFPYWp9KbLpPIPNLx5XEwGwHmSUnA8ATpXCW_LkxG6yQminU8vBT9R5DUMp436wtUKVRRQDZO1YKvJX7xiEqV8msh-GpfxxSsQx16LXAChDrNQDY_CaVuO9xcfJxQMaMzlBZ8si_1qRpUfQhPqrwKXkkoiHuzwGHLAxdzyKXTrVKPVTgpyAoQNZ0SstWS2aAUsT0atGhOC1mn0bGP3QYculyV_eBbRWqPaXdpyS4tyL_xGtgL_TshtRrE3_e3vvOoNZx5esCa2UkGaeONkGq8RIhTc9135aYyNnkolDkSzbnZsrOvqBnqt-OyPhLFogQYkrfi1RkO11s1RXlQEdOvImvIahyxygOymzifUXci2IHUzfsXT11rNhiDszxlQbJQWfsmh9V07_6WP1CkV_bpVEbwXMDtdfToaHg2rQNahvYjv0xrCyu19iHEEBmens5do5-4u1c6zMe9kwavGslrbqdmyWzuYUSyOp5WTLlPn4uvWW88PLMVfOPCj_KG29gD8hj8B_ZBvX4DrZkfLjRzH_du0vuZOm_qm8uKXRjHIHKoJdlQLaRnHpor8CZe2ZmXqlGKG9EAR5oP4x4Vq93VtdNdRUovoF4b0h61M2ng7mOKxcziqxT5LIzjPZTPCQLSvDVaDeypfJtWgT6pX1jwJRKsUfmrm2h1nAPeHqI4HOSyBH49t4gsb5RTqePwSsrqLhdgfVqbySInGavraBahMtcdtVlZugn6wL6OnNl3wpctOqVHnCDcEix33PEgBuxJMXEWorEEtQRFvJIwh2E0UMdyjzw5k4x65yForvq05q_42_CVPmgMHb896WCUwuzL8m0yW8NgnJoEroVzLCBQu5Zlx-fhLV8syIK6FuND2OzwErdBtJrNZfQq30angycga5j6oSnw3A1M-6SmcM69lqJqhMSUH2CKKJ5ZZTPn3ntHwYEu_7zhkyCsqtHT2l7DcpcgSaF-LdqvDcs32WLKxLgeADdy8DdZ8P1ZpEOjj-NNOOTzUJZnf55Nka2boSuAUf6dbJ6XttR7Kqcs6pzOv5kI_5ZI27NFnblfbgIeeJ3y8M3Kx1izpCE63KXG_eetAp90vTNh04IZjgKlQ7nNZ1vjEy1aHbzKYADmkMkMqD24qqkR3x6OaOrSposXeTxxzSsWxYHPGhJfCymTHDod-CPBupJRNbW1qhdVjy8q1uZdZdha9xjUN-Log1pRaeSMW7VNUkyiJRuyJOthGp6uc7ZKgaH7vujII-P8WXjoiTtkaoBBVCam2e6S1CJFV2ZBSA4RjPaNsb-lSa2YIRvacVchC8ntUjdggnyskS9nq7MaLyvesPuqpBAp2VP0R9ICIgtY_eCc9FH7H0pi8rQcKuaB27k6TRFBTOkZlqLS8rNT8V9ZtG1ydpHlEaQgsLWCXqA2Vaj16NGbrF1Z5jwOMfQLEVu0MMXLKuqCyjwYD0kuMSDuwmMeXcThMvkEy17UKcuAbGswwVQXa"
+          }
+        ],
+        "role": "model"
+      },
+      "finishReason": "STOP",
+      "usageMetadata": {
+        "candidatesTokenCount": 44,
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 44
+          }
+        ],
+        "promptTokenCount": 5116,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 5116
+          }
+        ],
+        "thoughtsTokenCount": 2047,
+        "totalTokenCount": 7207,
+        "trafficType": "ON_DEMAND"
+      },
+      "avgLogprobs": -8.851070057262074,
+      "invocationId": "e-85523be7-d58d-45fc-ade3-66d491cb18fd",
+      "author": "incident_commander",
+      "actions": {
+        "stateDelta": {},
+        "artifactDelta": {},
+        "requestedAuthConfigs": {},
+        "requestedToolConfirmations": {}
+      },
+      "nodeInfo": {
+        "path": "incident_commander@1"
+      },
+      "longRunningToolIds": [],
+      "id": "17b1e8fa-7889-4067-a49e-fad64bd1bb04",
+      "timestamp": 1780875537.7616487
+    },
+    {
+      "content": {
+        "parts": [
+          {
+            "functionResponse": {
+              "id": "adk-6472bd7b-dc27-4f7d-85c1-0611d879c66f",
+              "name": "get-problem-by-id",
+              "response": {
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "Query metadata:\n{\n  \"grail\" : {\n    \"canonicalQuery\" : \"fetch dt.davis.problems, from:now() - 2h\\n| filter event.id == \\\"6664738189000279457_1780872499297V2\\\" OR event.id == concat(\\\"6664738189000279457_1780872499297V2\\\", \\\"V2\\\") OR display_id == \\\"6664738189000279457_1780872499297V2\\\"\",\n    \"timezone\" : \"Z\",\n    \"query\" : \"fetch dt.davis.problems, from:now()-2h | filter event.id == \\\"6664738189000279457_1780872499297V2\\\" or event.id == concat(\\\"6664738189000279457_1780872499297V2\\\", \\\"V2\\\") or display_id == \\\"6664738189000279457_1780872499297V2\\\"\",\n    \"scannedRecords\" : 344,\n    \"dqlVersion\" : \"V1_0\",\n    \"scannedBytes\" : 745842,\n    \"scannedDataPoints\" : 0,\n    \"analysisTimeframe\" : {\n      \"start\" : \"2026-06-07T21:39:07.442259245Z\",\n      \"end\" : \"2026-06-07T23:39:07.442259245Z\"\n    },\n    \"locale\" : \"und\",\n    \"executionTimeMilliseconds\" : 41,\n    \"notifications\" : [ ],\n    \"queryId\" : \"e19dc98e-9d35-443b-b3f4-3d28f6895a6b\",\n    \"sampled\" : false\n  },\n  \"metrics\" : [ ]\n}"
+                  },
+                  {
+                    "type": "text",
+                    "text": "Grail types for the records in the query result:\n[ {\n  \"mappings\" : {\n    \"timestamp\" : {\n      \"type\" : \"timestamp\",\n      \"types\" : [ ]\n    },\n    \"event.category\" : {\n      \"type\" : \"string\",\n      \"types\" : [ ]\n    },\n    \"display_id\" : {\n      \"type\" : \"string\",\n      \"types\" : [ ]\n    },\n    \"dt.davis.mute.status\" : {\n      \"type\" : \"string\",\n      \"types\" : [ ]\n    },\n    \"affected_entity_types\" : {\n      \"type\" : \"array\",\n      \"types\" : [ {\n        \"mappings\" : {\n          \"element\" : {\n            \"type\" : \"string\",\n            \"types\" : [ ]\n          }\n        },\n        \"indexRange\" : [ 0, 0 ]\n      } ]\n    },\n    \"event.status\" : {\n      \"type\" : \"string\",\n      \"types\" : [ ]\n    },\n    \"dt.davis.impact_level\" : {\n      \"type\" : \"array\",\n      \"types\" : [ {\n        \"mappings\" : {\n          \"element\" : {\n            \"type\" : \"string\",\n            \"types\" : [ ]\n          }\n        },\n        \"indexRange\" : [ 0, 0 ]\n      } ]\n    },\n    \"event.kind\" : {\n      \"type\" : \"string\",\n      \"types\" : [ ]\n    },\n    \"dt.analysis.ready\" : {\n      \"type\" : \"boolean\",\n      \"types\" : [ ]\n    },\n    \"dt.entity.http_check\" : {\n      \"type\" : \"array\",\n      \"types\" : [ {\n        \"mappings\" : {\n          \"element\" : {\n            \"type\" : \"string\",\n            \"types\" : [ ]\n          }\n        },\n        \"indexRange\" : [ 0, 0 ]\n      } ]\n    },\n    \"affected_entity_ids\" : {\n      \"type\" : \"array\",\n      \"types\" : [ {\n        \"mappings\" : {\n          \"element\" : {\n            \"type\" : \"string\",\n            \"types\" : [ ]\n          }\n        },\n        \"indexRange\" : [ 0, 0 ]\n      } ]\n    },\n    \"labels.alerting_profile\" : {\n      \"type\" : \"array\",\n      \"types\" : [ {\n        \"mappings\" : {\n          \"element\" : {\n            \"type\" : \"string\",\n            \"types\" : [ ]\n          }\n        },\n        \"indexRange\" : [ 0, 0 ]\n      } ]\n    },\n    \"event.severity\" : {\n      \"type\" : \"long\",\n      \"types\" : [ ]\n    },\n    \"event.name\" : {\n      \"type\" : \"string\",\n      \"types\" : [ ]\n    },\n    \"dt.davis.is_frequent_event\" : {\n      \"type\" : \"boolean\",\n      \"types\" : [ ]\n    },\n    \"dt.davis.is_duplicate\" : {\n      \"type\" : \"boolean\",\n      \"types\" : [ ]\n    },\n    \"affected_entity_names\" : {\n      \"type\" : \"array\",\n      \"types\" : [ {\n        \"mappings\" : {\n          \"element\" : {\n            \"type\" : \"string\",\n            \"types\" : [ ]\n          }\n        },\n        \"indexRange\" : [ 0, 0 ]\n      } ]\n    },\n    \"dt.davis.event_ids\" : {\n      \"type\" : \"array\",\n      \"types\" : [ {\n        \"mappings\" : {\n          \"element\" : {\n            \"type\" : \"string\",\n            \"types\" : [ ]\n          }\n        },\n        \"indexRange\" : [ 0, 0 ]\n      } ]\n    },\n    \"maintenance.is_under_maintenance\" : {\n      \"type\" : \"boolean\",\n      \"types\" : [ ]\n    },\n    \"event.description\" : {\n      \"type\" : \"string\",\n      \"types\" : [ ]\n    },\n    \"dt.duration_marker\" : {\n      \"type\" : \"duration\",\n      \"types\" : [ ]\n    },\n    \"event.status_transition\" : {\n      \"type\" : \"string\",\n      \"types\" : [ ]\n    },\n    \"dt.entity.synthetic_location\" : {\n      \"type\" : \"array\",\n      \"types\" : [ {\n        \"mappings\" : {\n          \"element\" : {\n            \"type\" : \"string\",\n            \"types\" : [ ]\n          }\n        },\n        \"indexRange\" : [ 0, 0 ]\n      } ]\n    },\n    \"event.id\" : {\n      \"type\" : \"string\",\n      \"types\" : [ ]\n    },\n    \"event.start\" : {\n      \"type\" : \"timestamp\",\n      \"types\" : [ ]\n    },\n    \"dt.openpipeline.source\" : {\n      \"type\" : \"string\",\n      \"types\" : [ ]\n    },\n    \"dt.openpipeline.pipelines\" : {\n      \"type\" : \"array\",\n      \"types\" : [ {\n        \"mappings\" : {\n          \"element\" : {\n            \"type\" : \"string\",\n            \"types\" : [ ]\n          }\n        },\n        \"indexRange\" : [ 0, 0 ]\n      } ]\n    }\n  },\n  \"indexRange\" : [ 0, 0 ]\n} ]"
+                  },
+                  {
+                    "type": "text",
+                    "text": "Query result records:\n[ {\n  \"timestamp\" : \"2026-06-07T23:18:20.173000000Z\",\n  \"event.category\" : \"AVAILABILITY\",\n  \"display_id\" : \"P-26062\",\n  \"dt.davis.mute.status\" : \"NOT_MUTED\",\n  \"affected_entity_types\" : [ \"dt.entity.http_check\" ],\n  \"event.status\" : \"ACTIVE\",\n  \"dt.davis.impact_level\" : [ \"Synthetic\" ],\n  \"event.kind\" : \"DAVIS_PROBLEM\",\n  \"dt.analysis.ready\" : true,\n  \"dt.entity.http_check\" : [ \"HTTP_CHECK-60120072A272FB3C\" ],\n  \"affected_entity_ids\" : [ \"HTTP_CHECK-60120072A272FB3C\" ],\n  \"labels.alerting_profile\" : [ \"Default\" ],\n  \"event.severity\" : \"3\",\n  \"event.name\" : \"Http monitor global outage\",\n  \"dt.davis.is_frequent_event\" : false,\n  \"dt.davis.is_duplicate\" : false,\n  \"affected_entity_names\" : [ \"VoiceOps Target - Session Errors\" ],\n  \"dt.davis.event_ids\" : [ \"6664738189000279457_1780872499297\" ],\n  \"maintenance.is_under_maintenance\" : false,\n  \"event.description\" : \"# Http monitor global outage\\n\\nThe problem **affects 1 entity** overall.\\n\\nFollowing entities were affected by the problem:\\n\\n**HTTP monitor, VoiceOps Target - Session Errors**\\n\\nAvailability: Http monitor global outage\\n\\n- Http monitor global outage of VoiceOps Target \\\\- Session Errors synthetic monitor configured in 1 location\\n|Location|Step|Failure details|\\n|:--|:--|:--|\\n|Iowa|1|Response status code rules violated, 500: Internal server error \\\\(500\\\\)|\",\n  \"dt.duration_marker\" : \"1800000000000\",\n  \"event.status_transition\" : \"UPDATED\",\n  \"dt.entity.synthetic_location\" : [ \"SYNTHETIC_LOCATION-0000000000000090\" ],\n  \"event.id\" : \"6664738189000279457_1780872499297V2\",\n  \"event.start\" : \"2026-06-07T22:48:19.297000000Z\",\n  \"dt.openpipeline.source\" : \"classic_root_cause_analysis\",\n  \"dt.openpipeline.pipelines\" : [ \"davis.problems:default\" ]\n} ]"
+                  }
+                ],
+                "structuredContent": {
+                  "records": [
+                    {
+                      "timestamp": "2026-06-07T23:18:20.173000000Z",
+                      "event.category": "AVAILABILITY",
+                      "display_id": "P-26062",
+                      "dt.davis.mute.status": "NOT_MUTED",
+                      "affected_entity_types": [
+                        "dt.entity.http_check"
+                      ],
+                      "event.status": "ACTIVE",
+                      "dt.davis.impact_level": [
+                        "Synthetic"
+                      ],
+                      "event.kind": "DAVIS_PROBLEM",
+                      "dt.analysis.ready": true,
+                      "dt.entity.http_check": [
+                        "HTTP_CHECK-60120072A272FB3C"
+                      ],
+                      "affected_entity_ids": [
+                        "HTTP_CHECK-60120072A272FB3C"
+                      ],
+                      "labels.alerting_profile": [
+                        "Default"
+                      ],
+                      "event.severity": "3",
+                      "event.name": "Http monitor global outage",
+                      "dt.davis.is_frequent_event": false,
+                      "dt.davis.is_duplicate": false,
+                      "affected_entity_names": [
+                        "VoiceOps Target - Session Errors"
+                      ],
+                      "dt.davis.event_ids": [
+                        "6664738189000279457_1780872499297"
+                      ],
+                      "maintenance.is_under_maintenance": false,
+                      "event.description": "# Http monitor global outage\n\nThe problem **affects 1 entity** overall.\n\nFollowing entities were affected by the problem:\n\n**HTTP monitor, VoiceOps Target - Session Errors**\n\nAvailability: Http monitor global outage\n\n- Http monitor global outage of VoiceOps Target \\- Session Errors synthetic monitor configured in 1 location\n|Location|Step|Failure details|\n|:--|:--|:--|\n|Iowa|1|Response status code rules violated, 500: Internal server error \\(500\\)|",
+                      "dt.duration_marker": "1800000000000",
+                      "event.status_transition": "UPDATED",
+                      "dt.entity.synthetic_location": [
+                        "SYNTHETIC_LOCATION-0000000000000090"
+                      ],
+                      "event.id": "6664738189000279457_1780872499297V2",
+                      "event.start": "2026-06-07T22:48:19.297000000Z",
+                      "dt.openpipeline.source": "classic_root_cause_analysis",
+                      "dt.openpipeline.pipelines": [
+                        "davis.problems:default"
+                      ]
+                    }
+                  ],
+                  "metadata": {
+                    "grail": {
+                      "canonicalQuery": "fetch dt.davis.problems, from:now() - 2h\n| filter event.id == \"6664738189000279457_1780872499297V2\" OR event.id == concat(\"6664738189000279457_1780872499297V2\", \"V2\") OR display_id == \"6664738189000279457_1780872499297V2\"",
+                      "timezone": "Z",
+                      "query": "fetch dt.davis.problems, from:now()-2h | filter event.id == \"6664738189000279457_1780872499297V2\" or event.id == concat(\"6664738189000279457_1780872499297V2\", \"V2\") or display_id == \"6664738189000279457_1780872499297V2\"",
+                      "scannedRecords": 344,
+                      "dqlVersion": "V1_0",
+                      "scannedBytes": 745842,
+                      "scannedDataPoints": 0,
+                      "analysisTimeframe": {
+                        "start": 1780868347.4422593,
+                        "end": 1780875547.4422593
+                      },
+                      "locale": "und",
+                      "executionTimeMilliseconds": 41,
+                      "notifications": [],
+                      "queryId": "e19dc98e-9d35-443b-b3f4-3d28f6895a6b",
+                      "sampled": false
+                    },
+                    "metrics": []
+                  },
+                  "types": [
+                    {
+                      "mappings": {
+                        "timestamp": {
+                          "type": "timestamp",
+                          "types": []
+                        },
+                        "event.category": {
+                          "type": "string",
+                          "types": []
+                        },
+                        "display_id": {
+                          "type": "string",
+                          "types": []
+                        },
+                        "dt.davis.mute.status": {
+                          "type": "string",
+                          "types": []
+                        },
+                        "affected_entity_types": {
+                          "type": "array",
+                          "types": [
+                            {
+                              "mappings": {
+                                "element": {
+                                  "type": "string",
+                                  "types": []
+                                }
+                              },
+                              "indexRange": [
+                                0,
+                                0
+                              ]
+                            }
+                          ]
+                        },
+                        "event.status": {
+                          "type": "string",
+                          "types": []
+                        },
+                        "dt.davis.impact_level": {
+                          "type": "array",
+                          "types": [
+                            {
+                              "mappings": {
+                                "element": {
+                                  "type": "string",
+                                  "types": []
+                                }
+                              },
+                              "indexRange": [
+                                0,
+                                0
+                              ]
+                            }
+                          ]
+                        },
+                        "event.kind": {
+                          "type": "string",
+                          "types": []
+                        },
+                        "dt.analysis.ready": {
+                          "type": "boolean",
+                          "types": []
+                        },
+                        "dt.entity.http_check": {
+                          "type": "array",
+                          "types": [
+                            {
+                              "mappings": {
+                                "element": {
+                                  "type": "string",
+                                  "types": []
+                                }
+                              },
+                              "indexRange": [
+                                0,
+                                0
+                              ]
+                            }
+                          ]
+                        },
+                        "affected_entity_ids": {
+                          "type": "array",
+                          "types": [
+                            {
+                              "mappings": {
+                                "element": {
+                                  "type": "string",
+                                  "types": []
+                                }
+                              },
+                              "indexRange": [
+                                0,
+                                0
+                              ]
+                            }
+                          ]
+                        },
+                        "labels.alerting_profile": {
+                          "type": "array",
+                          "types": [
+                            {
+                              "mappings": {
+                                "element": {
+                                  "type": "string",
+                                  "types": []
+                                }
+                              },
+                              "indexRange": [
+                                0,
+                                0
+                              ]
+                            }
+                          ]
+                        },
+                        "event.severity": {
+                          "type": "long",
+                          "types": []
+                        },
+                        "event.name": {
+                          "type": "string",
+                          "types": []
+                        },
+                        "dt.davis.is_frequent_event": {
+                          "type": "boolean",
+                          "types": []
+                        },
+                        "dt.davis.is_duplicate": {
+                          "type": "boolean",
+                          "types": []
+                        },
+                        "affected_entity_names": {
+                          "type": "array",
+                          "types": [
+                            {
+                              "mappings": {
+                                "element": {
+                                  "type": "string",
+                                  "types": []
+                                }
+                              },
+                              "indexRange": [
+                                0,
+                                0
+                              ]
+                            }
+                          ]
+                        },
+                        "dt.davis.event_ids": {
+                          "type": "array",
+                          "types": [
+                            {
+                              "mappings": {
+                                "element": {
+                                  "type": "string",
+                                  "types": []
+                                }
+                              },
+                              "indexRange": [
+                                0,
+                                0
+                              ]
+                            }
+                          ]
+                        },
+                        "maintenance.is_under_maintenance": {
+                          "type": "boolean",
+                          "types": []
+                        },
+                        "event.description": {
+                          "type": "string",
+                          "types": []
+                        },
+                        "dt.duration_marker": {
+                          "type": "duration",
+                          "types": []
+                        },
+                        "event.status_transition": {
+                          "type": "string",
+                          "types": []
+                        },
+                        "dt.entity.synthetic_location": {
+                          "type": "array",
+                          "types": [
+                            {
+                              "mappings": {
+                                "element": {
+                                  "type": "string",
+                                  "types": []
+                                }
+                              },
+                              "indexRange": [
+                                0,
+                                0
+                              ]
+                            }
+                          ]
+                        },
+                        "event.id": {
+                          "type": "string",
+                          "types": []
+                        },
+                        "event.start": {
+                          "type": "timestamp",
+                          "types": []
+                        },
+                        "dt.openpipeline.source": {
+                          "type": "string",
+                          "types": []
+                        },
+                        "dt.openpipeline.pipelines": {
+                          "type": "array",
+                          "types": [
+                            {
+                              "mappings": {
+                                "element": {
+                                  "type": "string",
+                                  "types": []
+                                }
+                              },
+                              "indexRange": [
+                                0,
+                                0
+                              ]
+                            }
+                          ]
+                        }
+                      },
+                      "indexRange": [
+                        0,
+                        0
+                      ]
+                    }
+                  ]
+                },
+                "isError": false
+              }
+            }
+          }
+        ],
+        "role": "user"
+      },
+      "invocationId": "e-85523be7-d58d-45fc-ade3-66d491cb18fd",
+      "author": "incident_commander",
+      "actions": {
+        "stateDelta": {},
+        "artifactDelta": {},
+        "requestedAuthConfigs": {},
+        "requestedToolConfirmations": {},
+        "renderUiWidgets": [
+          {
+            "id": "adk-6472bd7b-dc27-4f7d-85c1-0611d879c66f",
+            "provider": "mcp",
+            "payload": {
+              "resource_uri": "ui://visualizeGrailResults.html",
+              "tool": {
+                "name": "get-problem-by-id",
+                "title": "Root Cause Details Agent",
+                "description": "Read details of a single Davis problem by its display id, typically stored in the field name event.id or display_id",
+                "inputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "problemId": {
+                      "description": "the problem id. The format is 'number_numberV2' or number_number or P-number.",
+                      "type": "string"
+                    },
+                    "includeTypes": {
+                      "type": "boolean",
+                      "description": "If true the DQL query result types will be included in the result. Default value is true."
+                    },
+                    "history": {
+                      "description": "Specifies the time range in minutes (m), hours (h), or days (d) to look back when querying Davis problems:\nproblems with a timestamp in the range [now-history, now] are returned.\nInteger hours to look back from now (e.g., 30m = last half an hour, 5h = last 5 hours, 2d = last 2 days, 7d = last week)\n**DO NOT** use values greater than 60 days unless explicitly requested by the user.\n",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "problemId"
+                  ],
+                  "additionalProperties": false
+                },
+                "outputSchema": {
+                  "description": "Result of executing a DQL query against Dynatrace Grail",
+                  "properties": {
+                    "records": {
+                      "description": "The records returned by the DQL query.",
+                      "type": "array",
+                      "items": {
+                        "additionalProperties": true,
+                        "type": "object"
+                      }
+                    },
+                    "types": {
+                      "description": "The types for the records returned by the DQL query.",
+                      "type": "array",
+                      "items": {
+                        "additionalProperties": true,
+                        "type": "object"
+                      },
+                      "annotations": {
+                        "audience": [
+                          "user"
+                        ]
+                      }
+                    },
+                    "metadata": {
+                      "description": "Metadata about the query execution and results from Grail",
+                      "type": "object",
+                      "annotations": {
+                        "audience": [
+                          "user"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "records"
+                  ],
+                  "title": "Grail DQL Query Result",
+                  "type": "object",
+                  "x-content-type": "application/x-grail-query-result"
+                },
+                "annotations": {
+                  "title": "Root Cause Details Agent",
+                  "readOnlyHint": true,
+                  "destructiveHint": false,
+                  "idempotentHint": false,
+                  "openWorldHint": false,
+                  "returnDirect": true
+                },
+                "_meta": {
+                  "ui": {
+                    "resourceUri": "ui://visualizeGrailResults.html"
+                  },
+                  "customerFacingDescription": "Retrieve the full details of any Davis problem by providing its display ID."
+                }
+              },
+              "tool_args": {
+                "problemId": "6664738189000279457_1780872499297V2"
+              }
+            }
+          }
+        ]
+      },
+      "nodeInfo": {
+        "path": "incident_commander@1"
+      },
+      "id": "87c54ac9-7eb6-4ccc-ba81-4d2e25bbd1f2",
+      "timestamp": 1780875547.5737617
+    },
+    {
+      "modelVersion": "gemini-2.5-flash",
+      "content": {
+        "parts": [
+          {
+            "functionCall": {
+              "id": "adk-1070df08-b2c6-4d22-8997-34e337384f32",
+              "args": {
+                "limit": 10
+              },
+              "name": "get_recent_github_commits"
+            },
+            "thoughtSignature": "CuYHAY89a18nQUaqQMs2wQJafthDevMOEr7gBOJmzxTXL8O-RaxQrTNWh0nWROR0VO98eFTb3KBEGOLuujm7DY41ACSXYJ215qG-bqXqmNji01fonIUpW7L7OyzFAEAa2xa6xrwylEy2u1K8mvXx7x9SLHUiYKHWpLXGZZnualsPlFEKD3DJG6Y0YJmtrCUK4gqP_Xyppguwp6E6ri063n5lwBMxJI86TeAGMfKA8WERolRMYCrtCHBgI19zx6WU6dlC-T4bMGRtlBy6gg0LBy16HwL9JBJ68GcF8mdSr5irmWyEJejnux6G0o50lKf3OPDv7n0SVsuwrbUCNwP6M0laENqdPwngE2t1LCQExVKB1d9YjWRc9l72nCu4Grm3nWunisZ8SVoZ7_2eq7sCsliN_v8EERizEGYmpwvii7s8biXRypgedASpq7xjFnpqHS0LeUP0fZvabgxuwRlkf8Sh64FCNvl7POzReUTXa30ZesKUCuPqOL_uZv0knIekEg28FFlRlYfTHlzxSNycpHbq6A_f7YnpducvxYn805m4oqWzg9mcg77cyr4SA1soIuewMxr2xO-y_DNzTbWf63D8mzVz9coyewjzmBcb_6idUqBqEo6sVwN-Li0ktntX_E06cnXoqH15dUTODl4hJ8lzXGRHxB_fJwatb9Hder4I5DxPrb1k7qjO80yXrHTK7cOyugNmxTPd1AmJRuvQMmt7a34Ul69mHRMLXfV8t7tvOJX9pG7LZO2u0zI_eKmVnzr1Q03Am246SdEX86bnnY0OU2I6y5pGKn0FJ-Ul_eYaio7KSx7aXp4QgQn2qudjk7mJ7S4iulF_BFuZbbeBkkuRBu1boiFYY3NoqhBeKLSLaZrcJgVOwl16TkLlAFWSIltQZdfqjW4hIsG5nOMfNoyZ1yPu4WDqVhHFY5s9LynXKMNKrUX3oO0nkv_4NovnwKQgp8v3hvNhZvhV_Ep2Q7fKxWNgerz3jneinO1bW7lO8Pb6Se67Hmh2eAe2elzRNbpdvDMQW-rFaKiHv0wFetgy-sbDuGlN4J2AYg7ZJflnJKu3pfJbtsNsaO-l7HzMe2BZwh192xe43GblfOyQSVBW2Vy37NXPRyA3ln9SZhKSO2Tk4pwyzwipBDzmPNoTT4uaqaygF3IjhD69n47oHGcn6g-KBCNxmeq7lq0gByiAoD0cXWvqSp9Aqmgv9NnEwDde6NlUG36E1Q67KDqE4RWv_lBgW7Mq_i9uvoHlUG-65FZ-chPDYV4KDaVyReGQaXzyofq_QQQ-tmSk5flDjmNTOmRBBkr2QbiVBOoLv5mYpRCtW3Qdqp0="
+          }
+        ],
+        "role": "model"
+      },
+      "finishReason": "STOP",
+      "usageMetadata": {
+        "candidatesTokenCount": 9,
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 9
+          }
+        ],
+        "promptTokenCount": 9558,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 9558
+          }
+        ],
+        "thoughtsTokenCount": 336,
+        "totalTokenCount": 9903,
+        "trafficType": "ON_DEMAND"
+      },
+      "avgLogprobs": -4.594180636935764,
+      "invocationId": "e-85523be7-d58d-45fc-ade3-66d491cb18fd",
+      "author": "incident_commander",
+      "actions": {
+        "stateDelta": {},
+        "artifactDelta": {},
+        "requestedAuthConfigs": {},
+        "requestedToolConfirmations": {}
+      },
+      "nodeInfo": {
+        "path": "incident_commander@1"
+      },
+      "longRunningToolIds": [],
+      "id": "dd4089f0-51a6-47f5-97c8-bcbdb5068be0",
+      "timestamp": 1780875547.5988362
+    },
+    {
+      "content": {
+        "parts": [
+          {
+            "functionResponse": {
+              "id": "adk-1070df08-b2c6-4d22-8997-34e337384f32",
+              "name": "get_recent_github_commits",
+              "response": {
+                "commits": [
+                  {
+                    "sha": "ea294f89",
+                    "full_sha": "ea294f89f369e86306509eaf3afcd8e2e107bbb5",
+                    "message": "Add VAPI integration: voice call functionality and webhook handling",
+                    "author": "Sai",
+                    "timestamp": "2026-06-07T02:36:38Z",
+                    "url": "https://github.com/Byrrajus12/voiceops-agent/commit/ea294f89f369e86306509eaf3afcd8e2e107bbb5"
+                  },
+                  {
+                    "sha": "af3a78a1",
+                    "full_sha": "af3a78a1b63ab2c89572480e19fad2772ace86fc",
+                    "message": "Add demo.sh script + fix rollback.yml to actually redeploy to Cloud Run",
+                    "author": "Ayaan",
+                    "timestamp": "2026-06-06T20:01:51Z",
+                    "url": "https://github.com/Byrrajus12/voiceops-agent/commit/af3a78a1b63ab2c89572480e19fad2772ace86fc"
+                  },
+                  {
+                    "sha": "44959f84",
+                    "full_sha": "44959f842d819787512d672b0bb01d2ddb82bd08",
+                    "message": "Rewrite README: clearer local setup, demo steps, approval flow, env var docs",
+                    "author": "Ayaan",
+                    "timestamp": "2026-06-06T19:54:46Z",
+                    "url": "https://github.com/Byrrajus12/voiceops-agent/commit/44959f842d819787512d672b0bb01d2ddb82bd08"
+                  },
+                  {
+                    "sha": "871524da",
+                    "full_sha": "871524da3d786f2f50c3231189d696ccf9c4f89b",
+                    "message": "Add PROGRESS.md — development status, feature tracker, next steps",
+                    "author": "Ayaan",
+                    "timestamp": "2026-06-06T19:54:05Z",
+                    "url": "https://github.com/Byrrajus12/voiceops-agent/commit/871524da3d786f2f50c3231189d696ccf9c4f89b"
+                  },
+                  {
+                    "sha": "4fe49a50",
+                    "full_sha": "4fe49a505f9cf2f76ce90cd9f57572bad836f159",
+                    "message": "Reorder workflow: mitigate first, RCA/impact post-resolution",
+                    "author": "Ayaan",
+                    "timestamp": "2026-06-06T19:50:55Z",
+                    "url": "https://github.com/Byrrajus12/voiceops-agent/commit/4fe49a505f9cf2f76ce90cd9f57572bad836f159"
+                  },
+                  {
+                    "sha": "36f076d7",
+                    "full_sha": "36f076d7b472f0d74b91c8140074c0ec5504cf45",
+                    "message": "Add explicit RCA and Impact Analysis steps (Steps 2 and 3)",
+                    "author": "Ayaan",
+                    "timestamp": "2026-06-06T19:44:44Z",
+                    "url": "https://github.com/Byrrajus12/voiceops-agent/commit/36f076d7b472f0d74b91c8140074c0ec5504cf45"
+                  },
+                  {
+                    "sha": "d4fd6acf",
+                    "full_sha": "d4fd6acf64e11302bb359421a501d28c150cbd06",
+                    "message": "Poll workflow status until completion instead of one-shot check",
+                    "author": "Ayaan",
+                    "timestamp": "2026-06-06T19:42:49Z",
+                    "url": "https://github.com/Byrrajus12/voiceops-agent/commit/d4fd6acf64e11302bb359421a501d28c150cbd06"
+                  },
+                  {
+                    "sha": "9a964fef",
+                    "full_sha": "9a964fefe9a2ccb63b52c0e7920cb1ca46736706",
+                    "message": "Add full resolution loop: workflow status check, issue close, resolution briefing",
+                    "author": "Ayaan",
+                    "timestamp": "2026-06-06T19:40:43Z",
+                    "url": "https://github.com/Byrrajus12/voiceops-agent/commit/9a964fefe9a2ccb63b52c0e7920cb1ca46736706"
+                  },
+                  {
+                    "sha": "146bd20d",
+                    "full_sha": "146bd20de38645a35cee7c3f4236864d62ac6966",
+                    "message": "Confidence-gated rollback + browser approval UI",
+                    "author": "Ayaan",
+                    "timestamp": "2026-06-06T19:36:16Z",
+                    "url": "https://github.com/Byrrajus12/voiceops-agent/commit/146bd20de38645a35cee7c3f4236864d62ac6966"
+                  },
+                  {
+                    "sha": "fffdcaa9",
+                    "full_sha": "fffdcaa93b3f0c2f18d4bfe2f8b9d75efcbe7b3c",
+                    "message": "Fix f-string: escape angle-bracket placeholders in instruction text",
+                    "author": "Ayaan",
+                    "timestamp": "2026-06-06T19:28:34Z",
+                    "url": "https://github.com/Byrrajus12/voiceops-agent/commit/fffdcaa93b3f0c2f18d4bfe2f8b9d75efcbe7b3c"
+                  }
+                ],
+                "count": 10,
+                "repo": "Byrrajus12/voiceops-agent"
+              }
+            }
+          }
+        ],
+        "role": "user"
+      },
+      "invocationId": "e-85523be7-d58d-45fc-ade3-66d491cb18fd",
+      "author": "incident_commander",
+      "actions": {
+        "stateDelta": {},
+        "artifactDelta": {},
+        "requestedAuthConfigs": {},
+        "requestedToolConfirmations": {}
+      },
+      "nodeInfo": {
+        "path": "incident_commander@1"
+      },
+      "id": "3694825a-2af1-4dc5-b3c3-badb0dd2282c",
+      "timestamp": 1780875549.8637125
+    },
+    {
+      "modelVersion": "gemini-2.5-flash",
+      "content": {
+        "parts": [
+          {
+            "text": "⚡ Quick triage: no suspect commits found within 60 minutes before the incident. The nearest commit was ea294f89 by Sai, more than 12 hours before incident. Confidence: LOW.\n",
+            "thoughtSignature": "CpANAY89a1-2SG8A9DMH0JgEsgMm9HlNGTpIY3RMJjVhzJpMQ7tAAickA3AribraCmplpbYutpT_JZV5F1ZaRcV2IHCvo7Ec1KZM6COh2r7qGhe-xNqxr-gYX5scvtaQLmlq9KJVEXWobrD5f_Ahd6pVZxYU6kyO_MTWK-d-x2ATNj4rm2HcYio2GfrgtNVd-9qioahAqYsottyuniKc1NAcORa3dIpX73I0SnVczvERQF7N7fgFMKNmNgPk35wIcdJofU7sNV5RDTBw7pxzsS0DAR1irVbbxfrOrPbwTohqHTkKIsh4TiQp-Ru-s-X7i5VBEXwu5Wi65xTN1Quguqh9IUgEwXg9KeZpkci8hYJByAw_f3TtOImiLA1B0GDRB_HlqUtUEgtQABvg2XjAWqfplM-38DdjcPkAcD1uRD3zGGQGLuC1v_a9AfBviouGqiBdvposESpON1XgRBl35IulrqzYU2thXzIhUnRyz0GtcQ1BdlzxvLk5j2fDn-bbYGHf4ZHWVEnaaN9MbNpB5_qGFMcsyXqE5xdASVJF4lOeFV98FGzjoZhxjYXZn28TvTg-UxSHo7t8AhW00Lm1s6uewA1ul_B-K-WsClZrxFmXQeQdCKyW8HYR2KUBBoxgfSRzYAGHvWYPIkciUBndV7yiThohlkkakZhdfufTpuJXJue5joNugZHdLoyXHmvfb7w6r-CSDTXmbzqiQ70shsHlIkZKjIvXI2ejo3Ak-tjNOGgWuRH_FsDphnPDFgpyg-VfDAZEe7Vrxfm-AP2440dSNee73-NnLflkNU-LzNrQRE8L3dNVoZ4-GMrdkI9tahDLtGJkcn8aIfN-StNdhKJr_cZzo0JHV23cTw795Fccov8eB8h-xp-knAQC7XzaYtSc91NZehYLjPdRip9nEgoOzGSjc2V9fOduxsiq6-HFU0_Ex7qL_lErbTXYnaBRzo8JQxHlLxJ3IbRSXJS5isQpCj4mSxcbuZcrVfiFUFhNtjcLEtttP9lB32YGEmGHcRNntkmV1oywXJlaSxySu6Cu385PEtjTRUMeRZUNVCSJlnc_BBUbHeCA4DOp2nGoZpF8ltyKuY5MQ1fpoHnH0M3ha1zJw3-JUMwYOkqGAX6UWHUuiiikbJCwykm74oTC6y0EjadJ9xuptTcTPLwuOyl3025u9Lfw5XclWXJWbX5c--yJTezK1MYmiylvGCDEAxcaCL1xBwgNYLOlgJO2aiQn6-KlHi62MFyxarEK_YwFssuyroeldohqdhHC1w5QnUjTlzP-Wa9jo0F0vmM_ysTp8JGFAdIbek3QsTar3Mxw49fIMcS5gRtiYB71EbR8cCr79hRr2JDNdMuZZDQjQsKtvRhd7uYmnNv-quhXCRxe2m6caYxn-Ma8MX5bkNvyvnCS3WkrOFvq0My6rlqNbuwIOERSTmzAS1d1WhSgYcK7wCviuPpTdUTrzcMbzyYwgOVhvy7S0T8oKqHDGr8HNGwwD64mv4nixBDVSJ_k1_1ZShC_ZmMcT4Wq1bJLsufn3svVw6wYCG97uaQUBKnMLJwosQidLdcKLzmkCgpDInTi-mjuFzzaDXYViE_HQWcwoO8xZtFnT6sirHo5BKmL8DLWylOoIQpf_UtaAjqxNg-4S0FbHv_R2LkGBd1LFwQrKA7Xe1CoXgaHEb2OuEAs7GrI2oe8kcEM55LwQcqVMs2_Utb0jYAJQ46qv6Z_t7Np5Vo2eB6DnbhJttUBHS_-9yGBpvrpgO1Pvpzwvc2OCrepiDXqBb_2UswkbQcprY50y6Dl5B_eJ59se_yyohqyXqzktSiCpeenTNx96X8Fp-ls44LRKkqWj1577VsWCgMH0ipnf-grNzMUDAbb3ELhafIMdVDSZNUZrRAUn3TvlJwNL60SyPi1sUGMkeKArLhxsYFMs2TKGAudGtQai8EF5JFceJpcQcJvCYbn7ickDo7YiEwC8my7_0DUu7nYGlu2hBi_jLYcNlizki5r98nBBEeSbhOLob2M5h5wuwywgklaNtibw02VAxAUGwZSjUv2XCSMi2AMiuxFmTcvagSqrX0lj4zct2uZwfxnwgze3LPYzsfEvCPkQTg1x88agSsblrfCA7NmrkA7T_NyV6zXTUioHT9cZ1Qk7ODujJ9ul_Ee3uWm18_WnMNFAb8wzQRN3Udj_z1YnXfkFbU29WCgWjnAt0f9MJ8i51WE7SPcTni7_X2a3R3rdO79aFP--EQ9MY83"
+          },
+          {
+            "functionCall": {
+              "id": "adk-c3f4cf7c-0592-4af4-ad81-ace6c0e07b42",
+              "args": {
+                "briefing_text": "VoiceOps alert. AVAILABILITY incident P-26062 on VoiceOps Target - Session Errors since 2026-06-07T22:48:19Z UTC. No recent suspect commits found within 60 minutes before the incident. The nearest commit was ea294f89 by Sai at 2026-06-07T02:36:38Z. LOW-confidence rollback ready."
+              },
+              "name": "place_voice_call"
+            }
+          }
+        ],
+        "role": "model"
+      },
+      "finishReason": "STOP",
+      "usageMetadata": {
+        "cacheTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 9746
+          }
+        ],
+        "cachedContentTokenCount": 9746,
+        "candidatesTokenCount": 156,
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 156
+          }
+        ],
+        "promptTokenCount": 11325,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 11325
+          }
+        ],
+        "thoughtsTokenCount": 589,
+        "totalTokenCount": 12070,
+        "trafficType": "ON_DEMAND"
+      },
+      "avgLogprobs": -0.819022692166842,
+      "invocationId": "e-85523be7-d58d-45fc-ade3-66d491cb18fd",
+      "author": "incident_commander",
+      "actions": {
+        "stateDelta": {},
+        "artifactDelta": {},
+        "requestedAuthConfigs": {},
+        "requestedToolConfirmations": {}
+      },
+      "nodeInfo": {
+        "path": "incident_commander@1"
+      },
+      "longRunningToolIds": [],
+      "id": "cc61d6c5-8a6a-448d-bf3e-682ea982a823",
+      "timestamp": 1780875549.8877246
+    },
+    {
+      "content": {
+        "parts": [
+          {
+            "functionResponse": {
+              "id": "adk-c3f4cf7c-0592-4af4-ad81-ace6c0e07b42",
+              "name": "place_voice_call",
+              "response": {
+                "status": "triggered",
+                "vapi_status": 201,
+                "response": {
+                  "subscriptionLimits": {
+                    "concurrencyBlocked": false,
+                    "concurrencyLimit": 10,
+                    "remainingConcurrentCalls": 9
+                  },
+                  "id": "019ea474-6b67-7001-a6a6-4611c5f03896",
+                  "assistantId": "4614cf13-fc30-493c-b9f6-a94d466d84c3",
+                  "phoneNumberId": "6bb13ea1-d651-4b5c-8402-15ac7413f4b3",
+                  "type": "outboundPhoneCall",
+                  "createdAt": "2026-06-07T23:39:13.639Z",
+                  "updatedAt": "2026-06-07T23:39:13.639Z",
+                  "orgId": "3597e2b9-9ded-4962-bad2-991d9e1ef522",
+                  "cost": 0,
+                  "customer": {
+                    "number": "+15174026868"
+                  },
+                  "status": "queued",
+                  "metadata": {},
+                  "phoneCallProvider": "vapi",
+                  "assistantOverrides": {
+                    "firstMessage": "VoiceOps alert. AVAILABILITY incident P-26062 on VoiceOps Target - Session Errors since 2026-06-07T22:48:19Z UTC. No recent suspect commits found within 60 minutes before the incident. The nearest commit was ea294f89 by Sai at 2026-06-07T02:36:38Z. LOW-confidence rollback ready."
+                  },
+                  "monitor": {
+                    "listenUrl": "wss://phone-call-websocket.aws-us-west-2-backend-production1.vapi.ai/019ea474-6b67-7001-a6a6-4611c5f03896/listen",
+                    "controlUrl": "https://phone-call-websocket.aws-us-west-2-backend-production1.vapi.ai/019ea474-6b67-7001-a6a6-4611c5f03896/control"
+                  },
+                  "transport": {
+                    "conversationType": "voice",
+                    "provider": "vapi.sip"
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "role": "user"
+      },
+      "invocationId": "e-85523be7-d58d-45fc-ade3-66d491cb18fd",
+      "author": "incident_commander",
+      "actions": {
+        "stateDelta": {},
+        "artifactDelta": {},
+        "requestedAuthConfigs": {},
+        "requestedToolConfirmations": {}
+      },
+      "nodeInfo": {
+        "path": "incident_commander@1"
+      },
+      "id": "cbe245b9-c51f-4698-bea6-ce5f9e9666b9",
+      "timestamp": 1780875554.9213505
+    },
+    {
+      "modelVersion": "gemini-2.5-flash",
+      "content": {
+        "parts": [
+          {
+            "functionCall": {
+              "id": "adk-816f3823-20ed-4c37-bd50-dd97d88747f5",
+              "args": {
+                "action": "rollback to ea294f89",
+                "confidence": "LOW",
+                "incident_id": "P-26062",
+                "summary": "AVAILABILITY incident on VoiceOps Target - Session Errors. No recent suspect commits found, but nearest commit ea294f89 is being proposed for rollback.",
+                "risk_level": "high"
+              },
+              "name": "request_human_approval"
+            },
+            "thoughtSignature": "CsoEAY89a1-VZwbjgqKuLA9zJOCGVmwgP8gXTpaNIA8nZlVf9VyLZjXXi1ADUq1WbNUxKiYcrltc_IEQOKdSrS5HH65FBU2nnfi4mw-9DexX8pFMT6lwkU0R_hEfakXZnRyz3jvaNLtV4BYb6r8vC8BRb_rESJ0g5vDAoTaobUQR6GEC6q28dtdYTgbXRTqlrYR7ngAIWUoIXJ7rZ5pQ9ZvDJsmrjGx0HXTJ-tz-EzxNdyieIcA0tAReByMhJvx9CZ0yJs2sBocFfekAp_-Ld32IuIDkPno_1rlz1N6hrwpdPeuREZdsOypSFlFqfKRLqzF2rsDjZVaAjIrRB2AgIZxwFFS4cMlKRS19bxIVpp_rjUypAY45jFv16xr08YxYdzBCDofIkHZCe16oELgM4MluNhuVWrGYXOW_wMUZOGO7SGyrjhxTuuCQvIwhldKMMTLn5RaQLvr-vUrpdkjq8Zpox292qElUKs_oulDeA_r-r49vSFU6Gsp04jMz6MQ24suVOe18EngCS0A1Mk5Fd8iGVH8FnmD-ypVVn1uQNiDUq9XnG77R-PhgEFqx5WZpk9DcsnVRRa5a-ftmCQdcq6MSe9ljEF49HiwKxL2j7IuDKkCY8k6Wuai-YuFHnGvr3x75D28slnJHjFr7I0qno27KtRxB4ZimxJmonHucP7uCoWDSc4OE7CayXjhPWK_jTINkOt-ABXvsqu9q_qSEw1_o5Y_F3X3UyHYqSyTcO0XLIPUz01QtxMQfuRIWpXlolr1s5PtECxpjqwqa4g=="
+          }
+        ],
+        "role": "model"
+      },
+      "finishReason": "STOP",
+      "usageMetadata": {
+        "cacheTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 11381
+          }
+        ],
+        "cachedContentTokenCount": 11381,
+        "candidatesTokenCount": 66,
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 66
+          }
+        ],
+        "promptTokenCount": 12563,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 12563
+          }
+        ],
+        "thoughtsTokenCount": 156,
+        "totalTokenCount": 12785,
+        "trafficType": "ON_DEMAND"
+      },
+      "avgLogprobs": -0.5270364356763435,
+      "invocationId": "e-85523be7-d58d-45fc-ade3-66d491cb18fd",
+      "author": "incident_commander",
+      "actions": {
+        "stateDelta": {},
+        "artifactDelta": {},
+        "requestedAuthConfigs": {},
+        "requestedToolConfirmations": {}
+      },
+      "nodeInfo": {
+        "path": "incident_commander@1"
+      },
+      "longRunningToolIds": [],
+      "id": "2148a74d-76dc-4159-add7-6e45aaa5d6ae",
+      "timestamp": 1780875554.9439335
+    },
+    {
+      "content": {
+        "parts": [
+          {
+            "functionResponse": {
+              "id": "adk-816f3823-20ed-4c37-bd50-dd97d88747f5",
+              "name": "request_human_approval",
+              "response": {
+                "approval_id": "2a6aaa6f-f77e-4873-a11d-b0f8431fb1b0",
+                "status": "pending",
+                "created_at": "2026-06-07T23:39:16.513508+00:00"
+              }
+            }
+          }
+        ],
+        "role": "user"
+      },
+      "invocationId": "e-85523be7-d58d-45fc-ade3-66d491cb18fd",
+      "author": "incident_commander",
+      "actions": {
+        "stateDelta": {},
+        "artifactDelta": {},
+        "requestedAuthConfigs": {},
+        "requestedToolConfirmations": {}
+      },
+      "nodeInfo": {
+        "path": "incident_commander@1"
+      },
+      "id": "af0a7859-f0a2-403e-90a3-4b71d79fdfa2",
+      "timestamp": 1780875556.5202022
+    },
+    {
+      "modelVersion": "gemini-2.5-flash",
+      "content": {
+        "parts": [
+          {
+            "functionCall": {
+              "id": "adk-908764c9-d90f-4f2a-a0af-ff2e0e217bd5",
+              "args": {
+                "timeout_seconds": 300,
+                "approval_id": "2a6aaa6f-f77e-4873-a11d-b0f8431fb1b0"
+              },
+              "name": "poll_approval_status"
+            },
+            "thoughtSignature": "CuwBAY89a19DImKPJQcf7yo4ITO8SsDAIHt9QwD3bCClZG7uLGmNTO2UMaCBZ-HlcX-3jPAo1dJ4Tb-2zHFynv0IAyuqPVoePWxeaj0TTdKhqCCurdFWN4MBLaWKfg6bLJIRJP4G41HRMwTa0uE-HNMNIKmTzgcaYGmjfD_g1tcN94QjBW3znfJ512_uylwBe5_L3eMHyQgtbHG1uHWLg-uKJ6RFnhdiHwXco84lXMJMw17LanslTd86oReAsjb1jSNRCLi__LsXqBM-EeYx16Mfb2AWTd9_CH69jcfe9SSIrhhpYes0ERo-tmqN-h8="
+          }
+        ],
+        "role": "model"
+      },
+      "finishReason": "STOP",
+      "usageMetadata": {
+        "candidatesTokenCount": 45,
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 45
+          }
+        ],
+        "promptTokenCount": 12863,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 12863
+          }
+        ],
+        "thoughtsTokenCount": 79,
+        "totalTokenCount": 12987,
+        "trafficType": "ON_DEMAND"
+      },
+      "avgLogprobs": -0.19983736673990884,
+      "invocationId": "e-85523be7-d58d-45fc-ade3-66d491cb18fd",
+      "author": "incident_commander",
+      "actions": {
+        "stateDelta": {},
+        "artifactDelta": {},
+        "requestedAuthConfigs": {},
+        "requestedToolConfirmations": {}
+      },
+      "nodeInfo": {
+        "path": "incident_commander@1"
+      },
+      "longRunningToolIds": [],
+      "id": "76d03ebb-1f64-41e5-94ae-31be1ae6667b",
+      "timestamp": 1780875556.5457273
+    },
+    {
+      "content": {
+        "parts": [
+          {
+            "functionResponse": {
+              "id": "adk-908764c9-d90f-4f2a-a0af-ff2e0e217bd5",
+              "name": "poll_approval_status",
+              "response": {
+                "id": "2a6aaa6f-f77e-4873-a11d-b0f8431fb1b0",
+                "incident_id": "P-26062",
+                "action": "rollback to ea294f89",
+                "summary": "AVAILABILITY incident on VoiceOps Target - Session Errors. No recent suspect commits found, but nearest commit ea294f89 is being proposed for rollback.",
+                "risk_level": "high",
+                "confidence": "LOW",
+                "created_at": "2026-06-07T23:39:16.513508+00:00",
+                "status": "approved",
+                "decision": {
+                  "approved": true,
+                  "reason": "operator-approved",
+                  "decided_at": "2026-06-07T23:41:31.991553+00:00"
+                }
+              }
+            }
+          }
+        ],
+        "role": "user"
+      },
+      "invocationId": "e-85523be7-d58d-45fc-ade3-66d491cb18fd",
+      "author": "incident_commander",
+      "actions": {
+        "stateDelta": {},
+        "artifactDelta": {},
+        "requestedAuthConfigs": {},
+        "requestedToolConfirmations": {}
+      },
+      "nodeInfo": {
+        "path": "incident_commander@1"
+      },
+      "id": "f4255212-3afb-42b0-b75d-03ba3a42b749",
+      "timestamp": 1780875698.667926
+    },
+    {
+      "modelVersion": "gemini-2.5-flash",
+      "content": {
+        "parts": [
+          {
+            "functionCall": {
+              "id": "adk-985a50df-6239-41a8-bc86-18de1a7edad5",
+              "args": {
+                "incident_id": "P-26062",
+                "commit_sha": "ea294f89f369e86306509eaf3afcd8e2e107bbb5"
+              },
+              "name": "trigger_github_rollback"
+            },
+            "thoughtSignature": "CpgCAY89a19UzeLFb-qZ8NGgDjmKGu_HYz3sqcs9dIvEqqeW-hfQ2gzaZ-IsgV4hlcEG2ri8TkZOetR163g3302no6tSyyhm90G1JslLkBzetCeHinLhzRc8w6Ra1iiJO-fjG7OH7uytFOGJnOvhgHlULt0OFh3QFI9f6v1N_7XBPCATsAjsvARzagbQGV3_BNAHjL7FBzv5q_r2iTf_HKHKrHfCC_vguo4kOaUki3bu88NcM0fBd_GKL8FsmA8c73q7dMiTN4ts5NikylzIUA5TJTl2k0auP7MC3GLwvHF2zLYPpPpsAPTjS2_9bVUXtYaAKiOGss54mrKa1O16tGszuLlSTHPTLmBcJaGkOjzMlQvC74OLerSF7g=="
+          }
+        ],
+        "role": "model"
+      },
+      "finishReason": "STOP",
+      "usageMetadata": {
+        "cacheTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 12837
+          }
+        ],
+        "cachedContentTokenCount": 12837,
+        "candidatesTokenCount": 52,
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 52
+          }
+        ],
+        "promptTokenCount": 13167,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 13167
+          }
+        ],
+        "thoughtsTokenCount": 88,
+        "totalTokenCount": 13307,
+        "trafficType": "ON_DEMAND"
+      },
+      "avgLogprobs": -0.1642270821791429,
+      "invocationId": "e-85523be7-d58d-45fc-ade3-66d491cb18fd",
+      "author": "incident_commander",
+      "actions": {
+        "stateDelta": {},
+        "artifactDelta": {},
+        "requestedAuthConfigs": {},
+        "requestedToolConfirmations": {}
+      },
+      "nodeInfo": {
+        "path": "incident_commander@1"
+      },
+      "longRunningToolIds": [],
+      "id": "cabffd33-afe7-4ccf-9a3c-061f132d4a15",
+      "timestamp": 1780875698.6907332
+    },
+    {
+      "content": {
+        "parts": [
+          {
+            "functionResponse": {
+              "id": "adk-985a50df-6239-41a8-bc86-18de1a7edad5",
+              "name": "trigger_github_rollback",
+              "response": {
+                "status": "triggered",
+                "workflow": "rollback.yml",
+                "rollback_to": "ea294f89f369e86306509eaf3afcd8e2e107bbb5",
+                "incident_id": "P-26062",
+                "repo": "Byrrajus12/voiceops-agent",
+                "actions_url": "https://github.com/Byrrajus12/voiceops-agent/actions"
+              }
+            }
+          }
+        ],
+        "role": "user"
+      },
+      "invocationId": "e-85523be7-d58d-45fc-ade3-66d491cb18fd",
+      "author": "incident_commander",
+      "actions": {
+        "stateDelta": {},
+        "artifactDelta": {},
+        "requestedAuthConfigs": {},
+        "requestedToolConfirmations": {}
+      },
+      "nodeInfo": {
+        "path": "incident_commander@1"
+      },
+      "id": "bf1c8ffa-2a87-47aa-9d27-118437645416",
+      "timestamp": 1780875701.2654538
+    },
+    {
+      "modelVersion": "gemini-2.5-flash",
+      "content": {
+        "parts": [
+          {
+            "functionCall": {
+              "id": "adk-867045f3-8509-4b8d-b2a2-1f793bff4d26",
+              "args": {},
+              "name": "get_github_workflow_status"
+            },
+            "thoughtSignature": "CqQBAY89a1_Daf8-XggLD2ZsFkHPFlwJft4UE9-jmVnGGQ19TcdQGBnyom0LEXmWTbMi4OPXAmIHGwgo0cBQ37qPK5kiGT2l4u92cRCnBT5HDN7Kw1VACViF51NWaF2wJQIrqv19MEhUMX1ZrK6u54XnneI9SGYVkRidBtpvfWcdEPWugLcvdcI1q8-Xm4dXUb2ZwbFC_CmIh-MMQ7S-xfo8Ej7PkaM="
+          }
+        ],
+        "role": "model"
+      },
+      "finishReason": "STOP",
+      "usageMetadata": {
+        "candidatesTokenCount": 7,
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 7
+          }
+        ],
+        "promptTokenCount": 13399,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 13399
+          }
+        ],
+        "thoughtsTokenCount": 27,
+        "totalTokenCount": 13433,
+        "trafficType": "ON_DEMAND"
+      },
+      "avgLogprobs": -0.6837539672851562,
+      "invocationId": "e-85523be7-d58d-45fc-ade3-66d491cb18fd",
+      "author": "incident_commander",
+      "actions": {
+        "stateDelta": {},
+        "artifactDelta": {},
+        "requestedAuthConfigs": {},
+        "requestedToolConfirmations": {}
+      },
+      "nodeInfo": {
+        "path": "incident_commander@1"
+      },
+      "longRunningToolIds": [],
+      "id": "b3a30651-6d2a-4b9c-8e3e-42d81b63cbbb",
+      "timestamp": 1780875701.2896402
+    },
+    {
+      "content": {
+        "parts": [
+          {
+            "functionResponse": {
+              "id": "adk-867045f3-8509-4b8d-b2a2-1f793bff4d26",
+              "name": "get_github_workflow_status",
+              "response": {
+                "status": "completed",
+                "conclusion": "failure",
+                "run_id": 27108349579,
+                "html_url": "https://github.com/Byrrajus12/voiceops-agent/actions/runs/27108349579",
+                "created_at": "2026-06-07T23:41:41Z",
+                "head_sha": "ea294f89",
+                "display": "COMPLETED / failure"
+              }
+            }
+          }
+        ],
+        "role": "user"
+      },
+      "invocationId": "e-85523be7-d58d-45fc-ade3-66d491cb18fd",
+      "author": "incident_commander",
+      "actions": {
+        "stateDelta": {},
+        "artifactDelta": {},
+        "requestedAuthConfigs": {},
+        "requestedToolConfirmations": {}
+      },
+      "nodeInfo": {
+        "path": "incident_commander@1"
+      },
+      "id": "8c243615-fb59-443f-8cb3-2dcdeccfaeae",
+      "timestamp": 1780875712.6428046
+    },
+    {
+      "modelVersion": "gemini-2.5-flash",
+      "content": {
+        "parts": [
+          {
+            "text": "⚠️ Rollback FAILED — manual intervention needed. Stopping.\n",
+            "thoughtSignature": "Cu8BAY89a18XWCJFBOVpYg5O3nzz72rQb3kU9gxmGnkVi7EB12HB2b8EzL0eFS4nVk9pgWBV7FYcQ0dYPiXr0G6jBBWCeA07-fNo2KMS9Wyb2sivOrQwVgyL9yZhWJTNuEC6D2zjUk0rHuHd8apkKZGWuTb2tJfQOxptvv8BP90sUobEwewqO9YhicD6M4_D62aFCDerx3Zy5M90Wvp_Qyz1zlFlgeUEHuqox5On49CUUmIiNwc7QhOEA_v9v3D450dQ2sbStVFtsKwWCzsmlBxk1VWvYZiE9AopLgozQQI4w5eo289seu84Doo4ieknwFU="
+          }
+        ],
+        "role": "model"
+      },
+      "finishReason": "STOP",
+      "usageMetadata": {
+        "cacheTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 12872
+          }
+        ],
+        "cachedContentTokenCount": 12872,
+        "candidatesTokenCount": 13,
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 13
+          }
+        ],
+        "promptTokenCount": 13522,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 13522
+          }
+        ],
+        "thoughtsTokenCount": 43,
+        "totalTokenCount": 13578,
+        "trafficType": "ON_DEMAND"
+      },
+      "avgLogprobs": -0.817203741807204,
+      "invocationId": "e-85523be7-d58d-45fc-ade3-66d491cb18fd",
+      "author": "incident_commander",
+      "actions": {
+        "stateDelta": {},
+        "artifactDelta": {},
+        "requestedAuthConfigs": {},
+        "requestedToolConfirmations": {}
+      },
+      "nodeInfo": {
+        "path": "incident_commander@1"
+      },
+      "id": "d457a3e5-29e5-41e0-a146-8b1586deb41b",
+      "timestamp": 1780875712.6642463
+    }
+  ],
+  "lastUpdateTime": 1780875712.6642463
+}
