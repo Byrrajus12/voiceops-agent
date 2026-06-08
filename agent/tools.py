@@ -19,6 +19,53 @@ VAPI_WEBHOOK_URL = os.getenv("VAPI_WEBHOOK_URL", "")
 VAPI_CALLER_NUMBER = os.getenv("VAPI_CALLER_NUMBER", "")
 
 
+def get_commit_diff(commit_sha: str) -> dict:
+    """Fetch the actual code diff for a specific commit from GitHub.
+
+    Returns the list of changed files with their patches (diffs).
+    Use this during RCA to understand exactly what code changed and why it broke.
+    """
+    headers = {
+        "Authorization": f"Bearer {GITHUB_TOKEN}",
+        "Accept": "application/vnd.github.v3+json",
+    }
+    owner, repo = GITHUB_REPO.split("/", 1)
+    try:
+        resp = requests.get(
+            f"https://api.github.com/repos/{owner}/{repo}/commits/{commit_sha}",
+            headers=headers,
+            timeout=30,
+        )
+    except requests.RequestException as e:
+        return {"error": f"Network error: {e}"}
+
+    if resp.status_code == 404:
+        return {"error": f"Commit {commit_sha} not found"}
+    if resp.status_code != 200:
+        return {"error": f"GitHub API returned {resp.status_code}"}
+
+    data = resp.json()
+    files = []
+    for f in data.get("files", []):
+        files.append({
+            "filename": f["filename"],
+            "status": f["status"],
+            "additions": f["additions"],
+            "deletions": f["deletions"],
+            "patch": f.get("patch", "")[:3000],
+        })
+
+    return {
+        "sha": data["sha"],
+        "message": data["commit"]["message"],
+        "author": data["commit"]["author"]["name"],
+        "timestamp": data["commit"]["author"]["date"],
+        "files_changed": len(files),
+        "files": files,
+        "html_url": data["html_url"],
+    }
+
+
 def get_recent_github_commits(limit: int = 10) -> dict:
     """Fetch the most recent commits from the monitored GitHub repository.
 
@@ -56,6 +103,7 @@ def get_recent_github_commits(limit: int = 10) -> dict:
         })
 
     return {"commits": commits, "count": len(commits), "repo": GITHUB_REPO}
+
 
 
 def generate_voice_briefing(briefing_text: str, output_path: str = "/tmp/incident_briefing.mp3") -> dict:

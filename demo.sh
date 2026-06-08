@@ -57,18 +57,63 @@ cmd_status() {
 }
 
 cmd_break() {
-  log "\nBreaking target service (BROKEN=true)..."
+  local mode="${1:-crash}"
+  local valid_modes="crash slow auth_error db_timeout dependency"
+  if ! echo "$valid_modes" | grep -qw "$mode"; then
+    err "Unknown failure mode: $mode"
+    echo ""
+    echo "  crash      → HTTP 500 MissingWebhookSecret (AVAILABILITY)"
+    echo "  slow       → 8-15s timeout on all requests (PERFORMANCE)"
+    echo "  auth_error → HTTP 401 invalid JWT (ERROR_RATE)"
+    echo "  db_timeout → HTTP 503 DB pool exhausted + stack trace (AVAILABILITY)"
+    echo "  dependency → HTTP 502 downstream service unreachable (AVAILABILITY)"
+    exit 1
+  fi
+
+  # ── Step 1: Push a "bad" commit so the agent has a real commit to find ──────
+  log "\nStep 1 — Pushing a bad deploy commit to the repo..."
+
+  # Write a marker file in target-service/ so the commit touches the right directory
+  local marker="target-service/.demo-deploy"
+  local commit_msg=""
+  case "$mode" in
+    crash)      commit_msg="Update voice-agent session handler: remove webhook_secret validation" ;;
+    slow)       commit_msg="Refactor session DB queries: switch to synchronous connection pool" ;;
+    auth_error) commit_msg="Rotate voice-agent JWT signing key: update token validation config" ;;
+    db_timeout) commit_msg="Increase session connection pool size: update pool config params" ;;
+    dependency) commit_msg="Update notification-service endpoint: migrate to new internal URL" ;;
+  esac
+
+  echo "FAILURE_MODE=$mode | deployed=$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$marker"
+  git add "$marker"
+  git commit -m "$commit_msg"
+  git push origin main
+  ok "Bad deploy commit pushed: \"$commit_msg\""
+
+  # ── Step 2: Break the Cloud Run service ─────────────────────────────────────
+  log "\nStep 2 — Flipping BROKEN=true on Cloud Run (mode=$mode)..."
   gcloud run services update "$TARGET_SVC" \
     --region "$REGION" \
     --project "$PROJECT" \
-    --update-env-vars "BROKEN=true" \
+    --update-env-vars "BROKEN=true,FAILURE_MODE=$mode" \
     --quiet
-  ok "Target service is now broken"
+
+  ok "Target service is now broken — mode: $mode"
+  echo ""
+  case "$mode" in
+    crash)      info "Failure: HTTP 500 MissingWebhookSecret on /voice-agent/session/start" ;;
+    slow)       info "Failure: 8-15s delays → Dynatrace PERFORMANCE degradation" ;;
+    auth_error) info "Failure: HTTP 401 invalid JWT on session start" ;;
+    db_timeout) info "Failure: HTTP 503 DB pool exhausted with stack trace" ;;
+    dependency) info "Failure: HTTP 502 notification-service unreachable" ;;
+  esac
   info "Dynatrace Synthetic Monitor polls every ~1 min → Davis AI problem will fire in 2–3 min"
-  info "Watch: $AGENT_URL"
   echo ""
   warn "Run the agent once a problem appears:"
   echo "  Prompt: 'Check for active incidents and run the full incident response workflow.'"
+  echo ""
+  info "The agent will find commit: \"$commit_msg\""
+  info "get_commit_diff will show the marker file change — that's the 'bad deploy'."
 }
 
 cmd_fix() {
@@ -92,7 +137,7 @@ cmd_demo() {
   cmd_status
 
   log "Step 2 — Break the target service"
-  cmd_break
+  cmd_break "${1:-crash}"
 
   echo ""
   log "Step 3 — Wait for Dynatrace to detect the incident"
@@ -265,7 +310,7 @@ cmd_help() {
   echo ""
   echo "Demo commands:"
   echo "  demo                   Full guided demo flow (break → wait → run agent)"
-  echo "  break                  Set target service BROKEN=true on Cloud Run"
+  echo "  break [mode]           Break service on Cloud Run (modes: crash slow auth_error db_timeout dependency)"
   echo "  fix                    Set target service BROKEN=false on Cloud Run"
   echo "  approve <incident_id>  Approve a pending rollback via the approval server"
   echo "  reject  <incident_id>  Reject a pending rollback"
@@ -284,7 +329,7 @@ shift || true
 
 case "$CMD" in
   demo)    cmd_demo ;;
-  break)   cmd_break ;;
+  break)   cmd_break "${1:-crash}" ;;
   fix)     cmd_fix ;;
   status)  cmd_status ;;
   approve) cmd_approve "${1:-}" ;;
