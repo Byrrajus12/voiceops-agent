@@ -242,7 +242,8 @@ def create_github_issue(incident_id: str, title: str, body: str) -> dict:
 def trigger_github_rollback(commit_sha: str, incident_id: str) -> dict:
     """Trigger the GitHub Actions rollback workflow via workflow_dispatch.
 
-    Dispatches the rollback.yml workflow targeting the specified commit SHA.
+    Pass the LAST KNOWN GOOD commit SHA (the commit immediately before the bad one).
+    The workflow checks out that SHA and deploys it — restoring the safe version of the code.
     Returns immediately — the workflow runs asynchronously in GitHub Actions.
     """
     headers = {

@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       rollback_to:
-        description: "SHA of the bad commit to revert (we deploy its parent)"
+        description: "Last known good commit SHA to deploy (the commit BEFORE the bad one)"
         required: true
         type: string
       incident_id:
@@ -31,23 +31,17 @@ jobs:
       id-token: write
 
     steps:
-      - name: Checkout repository (full history)
+      - name: Checkout target commit
         uses: actions/checkout@v4
         with:
+          ref: ${{ inputs.rollback_to }}
           fetch-depth: 0
-
-      - name: Resolve good parent commit
-        run: |
-          PARENT=$(git rev-parse "${{ inputs.rollback_to }}^")
-          git checkout "$PARENT"
-          echo "PARENT_SHA=$PARENT" >> $GITHUB_ENV
 
       - name: Display rollback context
         run: |
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "  ROLLBACK INITIATED"
-          echo "  Bad commit   : ${{ inputs.rollback_to }}"
-          echo "  Deploying    : ${{ env.PARENT_SHA }}"
+          echo "  Target SHA   : ${{ inputs.rollback_to }}"
           echo "  Incident ID  : ${{ inputs.incident_id }}"
           echo "  Triggered by : ${{ inputs.triggered_by }}"
           echo "  Timestamp    : $(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -69,7 +63,7 @@ jobs:
 
       - name: Build and push image
         run: |
-          IMAGE="gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE }}:${{ env.PARENT_SHA }}"
+          IMAGE="gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE }}:${{ inputs.rollback_to }}"
           docker build ./target-service --tag "$IMAGE"
           docker push "$IMAGE"
           echo "IMAGE=$IMAGE" >> $GITHUB_ENV
@@ -89,18 +83,30 @@ jobs:
             --region ${{ env.REGION }} \
             --project ${{ env.PROJECT_ID }} \
             --format 'value(status.url)')
-          echo "Checking $URL/health ..."
           sleep 5
+
+          echo "--- /health ---"
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$URL/health")
-          if [ "$STATUS" = "200" ]; then
-            echo "✓ Health check passed — service is healthy after rollback"
-          else
-            echo "✗ Health check returned HTTP $STATUS"
+          if [ "$STATUS" != "200" ]; then
+            echo "✗ /health returned HTTP $STATUS"
             exit 1
           fi
+          echo "✓ /health OK"
+
+          echo "--- /voice-agent/session/start ---"
+          SESSION_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X POST "$URL/voice-agent/session/start" \
+            -H "Content-Type: application/json" \
+            -d '{"session_id":"rollback-verify","metadata":{"source":"rollback-health-check"}}')
+          if [ "$SESSION_STATUS" != "200" ]; then
+            echo "✗ session/start returned HTTP $SESSION_STATUS — rollback did NOT fix the service"
+            exit 1
+          fi
+          echo "✓ session/start OK"
+          echo "✓ Rollback verified — both endpoints healthy"
 
       - name: Summary
         run: |
           echo ""
-          echo "✅ Rolled back FROM ${{ inputs.rollback_to }} TO ${{ env.PARENT_SHA }} — verified healthy."
+          echo "✅ Rollback to ${{ inputs.rollback_to }} deployed and verified healthy."
           echo "   Incident ${{ inputs.incident_id }} should now be resolving in Dynatrace."

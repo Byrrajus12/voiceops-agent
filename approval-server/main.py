@@ -123,11 +123,7 @@ async def update_incident_state(incident_id: str, request: Request):
 
 
 def _extract_call_context(body: dict) -> tuple[str, str]:
-    """Pull incident_id and approval_id from a VAPI function-call payload.
-
-    VAPI includes message.call.metadata (what we stored via place_voice_call) in
-    all function-call events, so we don't need the LLM to pass IDs as parameters.
-    """
+    """Pull incident_id and approval_id from a VAPI function-call payload."""
     message = body.get("message") or body
     call = message.get("call") or body.get("call") or {}
     metadata = call.get("metadata") or {}
@@ -144,14 +140,36 @@ def _extract_call_context(body: dict) -> tuple[str, str]:
     return incident_id or "", approval_id or ""
 
 
+def _extract_tool_call_id(body: dict) -> str:
+    """Extract the toolCallId VAPI sends so we can echo it back in the response."""
+    message = body.get("message") or body
+    # VAPI puts it in message.toolCallList[0].id
+    tool_call_list = message.get("toolCallList") or []
+    if tool_call_list:
+        return tool_call_list[0].get("id", "")
+    # Fallback: message.functionCall.id (older format)
+    fc = message.get("functionCall") or {}
+    return fc.get("id", "")
+
+
+def _vapi_result(tool_call_id: str, result: str) -> dict:
+    """Build the VAPI tool response format.
+
+    VAPI requires {"results": [{"toolCallId": "...", "result": "..."}]}.
+    Returning {"result": "..."} (singular) causes 'No result returned' in the LLM.
+    """
+    return {"results": [{"toolCallId": tool_call_id, "result": result}]}
+
+
 @app.post("/vapi/tool/get_incident_status")
 async def vapi_tool_get_incident_status(request: Request):
     """VAPI function tool — operator asked what's happening mid-call."""
     body = await request.json()
+    tool_call_id = _extract_tool_call_id(body)
     incident_id, _ = _extract_call_context(body)
 
     if not incident_id:
-        return {"result": "No incident ID in call context."}
+        return _vapi_result(tool_call_id, "No incident ID in call context.")
 
     match = next((v for v in _pending.values() if v["incident_id"] == incident_id), None)
     state_text = _incident_state.get(incident_id, "")
@@ -167,17 +185,14 @@ async def vapi_tool_get_incident_status(request: Request):
     else:
         result = state_text or "Incident response in progress."
 
-    return {"result": result}
+    return _vapi_result(tool_call_id, result)
 
 
 @app.post("/vapi/tool/approve_rollback")
 async def vapi_tool_approve_rollback(request: Request):
-    """VAPI function tool — operator approved the rollback mid-call.
-
-    VAPI LLM calls this when the operator expresses approval in natural language.
-    Fires during the active call so poll_approval_status resolves immediately.
-    """
+    """VAPI function tool — operator approved the rollback mid-call."""
     body = await request.json()
+    tool_call_id = _extract_tool_call_id(body)
     incident_id, approval_id = _extract_call_context(body)
 
     try:
@@ -186,19 +201,20 @@ async def vapi_tool_approve_rollback(request: Request):
         elif incident_id:
             await approve_by_incident(incident_id, reason="voice_approved")
         else:
-            return {"result": "Couldn't find the approval request — check the dashboard to approve manually."}
+            return _vapi_result(tool_call_id, "Couldn't find the approval request — check the dashboard to approve manually.")
     except HTTPException as e:
         if "Already decided" in str(e.detail):
-            return {"result": "Already approved — rollback is in progress."}
-        return {"result": f"Approval error: {e.detail}"}
+            return _vapi_result(tool_call_id, "Already approved — rollback is in progress. Stay on the line.")
+        return _vapi_result(tool_call_id, f"Approval error: {e.detail}")
 
-    return {"result": "Got it — triggering the rollback now."}
+    return _vapi_result(tool_call_id, "Rollback approved. Stay on the line — I'll give you live updates as the rollback runs. Do NOT end the call.")
 
 
 @app.post("/vapi/tool/reject_rollback")
 async def vapi_tool_reject_rollback(request: Request):
     """VAPI function tool — operator rejected the rollback mid-call."""
     body = await request.json()
+    tool_call_id = _extract_tool_call_id(body)
     incident_id, approval_id = _extract_call_context(body)
 
     try:
@@ -207,13 +223,13 @@ async def vapi_tool_reject_rollback(request: Request):
         elif incident_id:
             await reject_by_incident(incident_id, reason="voice_rejected")
         else:
-            return {"result": "Couldn't find the approval request."}
+            return _vapi_result(tool_call_id, "Couldn't find the approval request.")
     except HTTPException as e:
         if "Already decided" in str(e.detail):
-            return {"result": "Already decided — standing down."}
-        return {"result": f"Error: {e.detail}"}
+            return _vapi_result(tool_call_id, "Already decided — standing down.")
+        return _vapi_result(tool_call_id, f"Error: {e.detail}")
 
-    return {"result": "Understood — standing down on the rollback."}
+    return _vapi_result(tool_call_id, "Understood — standing down on the rollback.")
 
 
 @app.post("/webhook/vapi")
