@@ -111,7 +111,8 @@ cmd_demo() {
   echo ""
 
   log "Step 5 — Approval (if MEDIUM/LOW confidence)"
-  echo -e "  Dashboard: ${CYAN}$APPROVAL_URL${RESET}"
+  echo -e "  Phone call: say ${BOLD}'approve'${RESET} or press ${BOLD}1${RESET} when the VAPI call comes in"
+  echo -e "  Dashboard:  ${CYAN}$APPROVAL_URL${RESET}"
   echo -e "  Or approve by incident ID:"
   echo -e "    ${BOLD}./demo.sh approve <incident_id>${RESET}"
   echo ""
