@@ -13,7 +13,6 @@ from agent.tools import (  # noqa: E402
     create_github_issue,
     generate_voice_briefing,
     get_commit_diff,
-    get_service_logs,
     place_voice_call,
     get_github_workflow_status,
     get_recent_github_commits,
@@ -66,7 +65,6 @@ You have access to:
   get_entity_id, ask_dynatrace_docs, find_troubleshooting_guides, adaptive_anomaly_detector
 - GitHub tools: get_recent_github_commits, get_commit_diff, create_github_issue,
   trigger_github_rollback, get_github_workflow_status, close_github_issue
-- Log tools: get_service_logs (actual Dynatrace log lines — error messages, stack traces)
 - Ops tools: place_voice_call, generate_voice_briefing, request_human_approval, poll_approval_status
 
 PRIORITY: MITIGATE FIRST. Stop the bleeding before investigating. RCA and impact analysis happen
@@ -152,8 +150,13 @@ Now do the deep investigation you skipped during triage. The goal is to explain 
 not just WHEN — use actual logs and code, not just metrics.
 
 A) READ THE ACTUAL ERROR LOGS
-   Call get_service_logs(entity_id=<affected_entity_id>, minutes_back=30).
-   This returns real error log lines from Dynatrace — exception types, stack traces, error messages.
+   Use execute_dql with this query (replace <entity_id> with the affected entity ID):
+     fetch logs
+     | filter dt.entity.service == "<entity_id>"
+     | filter loglevel == "ERROR" or loglevel == "WARN"
+     | sort timestamp desc
+     | limit 20
+   This returns real error log lines — exception types, stack traces, error messages.
    Quote the key error message verbatim: "Exact error: <log content>"
    This is the most direct evidence of what failed.
 
@@ -226,7 +229,6 @@ RULES
         dynatrace_mcp,
         get_recent_github_commits,
         get_commit_diff,
-        get_service_logs,
         create_github_issue,
         generate_voice_briefing,
         place_voice_call,
