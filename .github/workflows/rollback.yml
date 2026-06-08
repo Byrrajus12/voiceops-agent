@@ -58,12 +58,14 @@ jobs:
         with:
           project_id: ${{ env.PROJECT_ID }}
 
+      - name: Configure Docker for GCR
+        run: gcloud auth configure-docker gcr.io --quiet
+
       - name: Build and push image
         run: |
           IMAGE="gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE }}:${{ inputs.rollback_to }}"
-          gcloud builds submit ./target-service \
-            --tag "$IMAGE" \
-            --project "${{ env.PROJECT_ID }}"
+          docker build ./target-service --tag "$IMAGE"
+          docker push "$IMAGE"
           echo "IMAGE=$IMAGE" >> $GITHUB_ENV
 
       - name: Deploy to Cloud Run (BROKEN=false)
