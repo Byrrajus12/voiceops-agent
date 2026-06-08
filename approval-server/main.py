@@ -115,37 +115,62 @@ async def health():
 
 @app.post("/webhook/vapi")
 async def vapi_webhook(request: Request):
-  """Receive VAPI call events/webhooks.
+    """Receive VAPI call events/webhooks.
 
-  Expected payload may include `metadata.incident_id`, `transcript`, or `dtmf`.
-  If the webhook indicates an explicit approval (DTMF '1' or transcript contains 'approve'/'yes'),
-  map that to the existing approval by incident endpoints.
-  """
-  payload = await request.json()
-  metadata = payload.get("metadata") or {}
-  incident_id = metadata.get("incident_id") or payload.get("incident_id")
-  transcript = payload.get("transcript") or payload.get("asr") or ""
-  dtmf = payload.get("dtmf") or payload.get("digits") or ""
+    VAPI wraps all events under a top-level "message" key. The call's metadata
+    (where we store incident_id) lives at message.call.metadata. Transcript is
+    at message.transcript for end-of-call-report events.
+    """
+    payload = await request.json()
 
-  if not incident_id:
-    return {"status": "ignored", "reason": "no incident_id in payload"}
+    # VAPI wraps everything under "message"; fall back to root for non-standard senders
+    message = payload.get("message") or payload
+    msg_type = message.get("type", "unknown")
 
-  text = (transcript or "")
-  try:
-    # simple DTMF/ASR matching: accept '1', or words 'approve'/'yes'
-    if str(dtmf).strip() == "1" or any(w in text.lower() for w in ("approve", "yes", "confirm")):
-      # call existing helper to approve by incident
-      await approve_by_incident(incident_id, reason="voice_approved")
-      return {"status": "approved", "incident_id": incident_id}
+    # incident_id is stored in the call's metadata when place_voice_call is invoked
+    call = message.get("call") or {}
+    metadata = call.get("metadata") or message.get("metadata") or {}
+    incident_id = metadata.get("incident_id") or payload.get("incident_id")
 
-    if str(dtmf).strip() == "2" or any(w in text.lower() for w in ("reject", "no", "deny")):
-      await reject_by_incident(incident_id, reason="voice_rejected")
-      return {"status": "rejected", "incident_id": incident_id}
+    # transcript comes from end-of-call-report; dtmf from status-update
+    transcript = (
+        message.get("transcript")
+        or (message.get("artifact") or {}).get("transcript")
+        or payload.get("transcript")
+        or ""
+    )
+    dtmf = message.get("dtmf") or payload.get("dtmf") or payload.get("digits") or ""
 
-    return {"status": "ignored", "incident_id": incident_id, "note": "no approval keywords detected"}
-  except HTTPException as e:
-    # propagate HTTP errors as JSON
-    return {"status": "error", "detail": str(e.detail)}
+    approval_id = metadata.get("approval_id") or call.get("approval_id")
+    if not incident_id and not approval_id:
+        return {"status": "ignored", "reason": "no incident_id or approval_id in payload", "type": msg_type}
+
+    text = str(transcript).lower()
+    is_approve = str(dtmf).strip() == "1" or any(w in text for w in ("approve", "yes", "confirm"))
+    is_reject = str(dtmf).strip() == "2" or any(w in text for w in ("reject", "no", "deny"))
+
+    if not is_approve and not is_reject:
+        return {"status": "ignored", "type": msg_type, "note": "no approval keywords"}
+
+    try:
+        if approval_id:
+            # Direct lookup — most reliable path
+            if is_approve:
+                await approve(approval_id, reason="voice_approved")
+                return {"status": "approved", "approval_id": approval_id}
+            else:
+                await reject(approval_id, reason="voice_rejected")
+                return {"status": "rejected", "approval_id": approval_id}
+        else:
+            # Fallback: find pending approval by incident_id
+            if is_approve:
+                await approve_by_incident(incident_id, reason="voice_approved")
+                return {"status": "approved", "incident_id": incident_id}
+            else:
+                await reject_by_incident(incident_id, reason="voice_rejected")
+                return {"status": "rejected", "incident_id": incident_id}
+    except HTTPException as e:
+        return {"status": "error", "detail": str(e.detail)}
 
 
 # ── Browser UI ─────────────────────────────────────────────────
