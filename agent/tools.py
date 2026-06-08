@@ -441,14 +441,14 @@ def update_incident_state(incident_id: str, state: str) -> dict:
 
 
 def send_voice_update(call_id: str, message: str) -> dict:
-    """Push a milestone update into an active VAPI call mid-conversation.
+    """Speak a milestone update into an active VAPI call immediately — even during silence.
 
-    VAPI incorporates the message naturally in the assistant's voice — not a literal readout.
-    Call this after: rollback triggered, rollback done, RCA complete, issue filed.
-    If the call has already ended, this returns an error — that's fine, continue the workflow.
+    Uses VAPI's Live Call Control 'say' command which bypasses the LLM and streams
+    the utterance directly to TTS. The operator hears it without asking.
+    If the call has already ended this returns an error — that's fine, keep going.
     """
-    if not VAPI_API_KEY:
-        return {"status": "skipped", "reason": "no VAPI_API_KEY"}
+    if not VAPI_API_KEY or not call_id:
+        return {"status": "skipped", "reason": "no VAPI_API_KEY or call_id"}
 
     headers = {
         "Authorization": f"Bearer {VAPI_API_KEY}",
@@ -456,9 +456,9 @@ def send_voice_update(call_id: str, message: str) -> dict:
     }
     try:
         resp = requests.post(
-            f"https://api.vapi.ai/call/{call_id}/message",
+            f"https://api.vapi.ai/call/{call_id}/control",
             headers=headers,
-            json={"role": "system", "content": message},
+            json={"command": "say", "utterance": message},
             timeout=10,
         )
         if resp.status_code in (200, 201, 204):

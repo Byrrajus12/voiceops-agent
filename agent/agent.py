@@ -14,6 +14,7 @@ from agent.tools import (  # noqa: E402
     generate_voice_briefing,
     get_commit_diff,
     place_voice_call,
+    send_voice_update,
     update_incident_state,
     get_github_workflow_status,
     get_recent_github_commits,
@@ -112,7 +113,7 @@ BEFORE placing any call — reset the incident state so VAPI doesn't see stale d
 
 HIGH → Call place_voice_call with briefing_text=<context string>, incident_id=<display_id>.
        No phone number — it is configured server-side.
-       Save the call_id from the result (result["call_id"]) for reference.
+       Save the call_id from the result (result["call_id"]) — you will need it for send_voice_update.
        Go directly to trigger_github_rollback(commit_sha=<BAD_SHA>) after the call.
 
 MEDIUM/LOW → Create the approval FIRST so the voice webhook can resolve it:
@@ -120,7 +121,7 @@ MEDIUM/LOW → Create the approval FIRST so the voice webhook can resolve it:
      Save the returned approval_id.
   2. Call place_voice_call with briefing_text=<context string>, incident_id=<display_id>, approval_id=<approval_id>.
      Do not pass a phone number.
-     Save the call_id from the result (result["call_id"]).
+     Save the call_id from the result (result["call_id"]) — you will need it for send_voice_update.
   3. Display the approval gate:
   ┌──────────────────────────────────────────────────────────────────┐
   │  ⚠️  HUMAN APPROVAL REQUIRED                                     │
@@ -140,11 +141,14 @@ APPROVED/AUTO →
   Call update_incident_state(incident_id=<display_id>, state="Rollback triggered — deploying safe parent of [BAD_SHA] now.").
   Call trigger_github_rollback(commit_sha=<BAD_SHA>, incident_id=<display_id>).
   ← Pass BAD_SHA. The tool auto-fetches its parent from GitHub and deploys that.
+  Call send_voice_update(call_id=<call_id>, message="Rollback's triggered. Deploying the safe commit now — give me a couple minutes.").
   Report: "🔄 Rollback dispatched → https://github.com/Byrrajus12/voiceops-agent/actions"
   Call get_github_workflow_status() — polls until complete.
   - success → Call update_incident_state(incident_id=<display_id>, state="Rollback succeeded. Service is healthy. Running RCA now.").
+              Call send_voice_update(call_id=<call_id>, message="We're good — rollback's done and the service is back up. Running root cause analysis now.").
               "✅ Rollback succeeded."
   - failure → Call update_incident_state(incident_id=<display_id>, state="Rollback workflow failed — manual intervention needed.").
+              Call send_voice_update(call_id=<call_id>, message="Heads up — the rollback failed. Manual intervention needed. Check GitHub Actions.").
               "⚠️ Rollback FAILED — manual intervention needed. Stopping."
 
 STEP 4b — CONFIRM RESOLUTION
@@ -219,12 +223,14 @@ STEP 7 — CLOSE & REPORT
 2. Call create_github_issue to create a post-incident report (separate from the triage issue) with:
    title: "POST-INCIDENT REPORT [<display_id>]: <title>"
    body: full RCA verdict, impact numbers, timeline, anomaly findings, prevention recommendations.
+   Call send_voice_update(call_id=<call_id>, message="Root cause confirmed — <one sentence: what changed and why it broke>. Filing the post-incident report on GitHub now.").
 
 3. Call close_github_issue on the original triage issue with comment: "✅ Resolved. See post-incident report for full RCA."
 
 4. Final state update:
    Call update_incident_state(incident_id=<display_id>, state="All done. Post-incident report filed on GitHub. Incident closed.")
-   (The VAPI assistant wraps up the conversation naturally when the operator next asks for status.)
+   Call send_voice_update(call_id=<call_id>, message="All wrapped up — report's on GitHub and the incident's officially closed. You're all good.").
+   (The call can now end naturally.)
 
 Print final summary:
 ┌────────────────────────────────────────────────────────┐
@@ -251,6 +257,7 @@ RULES
         create_github_issue,
         generate_voice_briefing,
         place_voice_call,
+        send_voice_update,
         update_incident_state,
         request_human_approval,
         poll_approval_status,
