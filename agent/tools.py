@@ -48,8 +48,7 @@ def get_recent_github_commits(limit: int = 10) -> dict:
     commits = []
     for c in resp.json():
         commits.append({
-            "sha": c["sha"][:8],
-            "full_sha": c["sha"],
+            "sha": c["sha"],
             "message": c["commit"]["message"].split("\n")[0][:120],
             "author": c["commit"]["author"]["name"],
             "timestamp": c["commit"]["author"]["date"],
@@ -237,64 +236,112 @@ def trigger_github_rollback(commit_sha: str, incident_id: str) -> dict:
     return {"error": f"GitHub Actions API returned {resp.status_code}: {resp.text[:300]}"}
 
 
-def place_voice_call(briefing_text: str, to_number: str | None = None, incident_id: str | None = None) -> dict:
-    """Initiate an outbound phone call via VAPI.
+def _vapi_call_status(call_id: str, headers: dict) -> dict:
+    """Poll a single VAPI call and return its current status dict."""
+    try:
+        r = requests.get(f"https://api.vapi.ai/call/{call_id}", headers=headers, timeout=10)
+        return r.json() if r.status_code == 200 else {}
+    except Exception:
+        return {}
 
-    Attempts to create a call using VAPI and instruct the assistant to play the briefing
-    and ask for an approval phrase (e.g., "approve"). If VAPI credentials are missing or
-    the API call fails, falls back to `generate_voice_briefing` (TTS to file) and returns
-    the path to the transcript or audio.
+
+def _dispatch_vapi_call(payload: dict, headers: dict) -> dict | None:
+    """POST to VAPI /call/phone and return the response JSON, or None on failure."""
+    try:
+        r = requests.post("https://api.vapi.ai/call/phone", headers=headers, json=payload, timeout=30)
+        if r.status_code in (200, 201, 202, 204):
+            return r.json()
+    except Exception:
+        pass
+    return None
+
+
+def place_voice_call(
+    briefing_text: str,
+    to_number: str | None = None,
+    incident_id: str | None = None,
+    approval_id: str | None = None,
+) -> dict:
+    """Initiate an outbound VAPI phone call with the incident briefing.
+
+    Passes incident_id and approval_id in call metadata so the VAPI webhook
+    can directly approve/reject the right request when the engineer responds
+    by voice. Polls the call for up to 35 seconds; if it ends in silence
+    (no answer / carrier drop), retries once automatically.
+
+    Falls back to generate_voice_briefing (TTS) if VAPI credentials are missing.
     """
     if not VAPI_API_KEY or not VAPI_PHONE_NUMBER_ID or not VAPI_ASSISTANT_ID:
-        # Missing credentials — fallback to TTS transcript/audio
-        fallback_path = "/tmp/incident_briefing.txt"
         try:
-            # attempt normal TTS mp3 generation first
             tts_result = generate_voice_briefing(briefing_text)
             return {"status": "vapi_unavailable", "reason": "missing_credentials", "fallback": tts_result}
         except Exception:
+            fallback_path = "/tmp/incident_briefing.txt"
             with open(fallback_path, "w") as f:
                 f.write(briefing_text)
             return {"status": "vapi_unavailable", "reason": "missing_credentials", "path": fallback_path}
-
-    payload = {
-        "phoneNumberId": VAPI_PHONE_NUMBER_ID,
-        "assistantId": VAPI_ASSISTANT_ID,
-        "customer": {"number": to_number or os.getenv("YOUR_PHONE_NUMBER")},
-        "assistantOverrides": {
-            "firstMessage": briefing_text,
-        },
-        "metadata": {},
-    }
-    if incident_id:
-        payload["metadata"]["incident_id"] = incident_id
 
     headers = {
         "Authorization": f"Bearer {VAPI_API_KEY}",
         "Content-Type": "application/json",
     }
+    metadata: dict = {}
+    if incident_id:
+        metadata["incident_id"] = incident_id
+    if approval_id:
+        metadata["approval_id"] = approval_id
 
-    try:
-        resp = requests.post("https://api.vapi.ai/call/phone", headers=headers, json=payload, timeout=30)
-    except requests.RequestException as e:
-        # network error — fallback to TTS
-        tts_result = generate_voice_briefing(briefing_text)
-        return {"status": "error", "error": f"Network error contacting VAPI: {e}", "fallback": tts_result}
+    payload = {
+        "phoneNumberId": VAPI_PHONE_NUMBER_ID,
+        "assistantId": VAPI_ASSISTANT_ID,
+        "customer": {"number": to_number or VAPI_CALLER_NUMBER},
+        "assistantOverrides": {"firstMessage": briefing_text},
+        "metadata": metadata,
+    }
 
-    if resp.status_code in (200, 201, 202, 204):
-        try:
-            data = resp.json()
-        except Exception:
-            data = {"raw_text": resp.text}
-        return {"status": "triggered", "vapi_status": resp.status_code, "response": data}
+    def _attempt(attempt_num: int) -> dict:
+        data = _dispatch_vapi_call(payload, headers)
+        if data is None:
+            return {"status": "error", "attempt": attempt_num, "error": "VAPI dispatch failed"}
 
-    # Non-success from VAPI — fallback
-    try:
-        body = resp.json()
-    except Exception:
-        body = {"text": resp.text}
-    tts_result = generate_voice_briefing(briefing_text)
-    return {"status": "error", "vapi_status": resp.status_code, "vapi_response": body, "fallback": tts_result}
+        call_id = data.get("id", "")
+        # Poll up to 35 seconds to detect live connection vs silent drop
+        for _ in range(7):
+            time.sleep(5)
+            status_data = _vapi_call_status(call_id, headers)
+            call_status = status_data.get("status", "")
+            ended_reason = status_data.get("endedReason", "")
+
+            if call_status == "in-progress":
+                # Call is live — engineer is on the line, stop waiting
+                return {"status": "in-progress", "call_id": call_id, "attempt": attempt_num}
+
+            if call_status == "ended":
+                return {
+                    "status": "ended",
+                    "ended_reason": ended_reason,
+                    "call_id": call_id,
+                    "attempt": attempt_num,
+                }
+
+        # Timed out polling — call is still queued/ringing
+        return {"status": "ringing", "call_id": call_id, "attempt": attempt_num}
+
+    result = _attempt(1)
+
+    # If the first attempt ended in silence (carrier drop / no answer), retry once
+    if result.get("status") == "ended" and result.get("ended_reason") == "silence-timed-out":
+        time.sleep(5)
+        retry_result = _attempt(2)
+        return {
+            "status": retry_result.get("status"),
+            "ended_reason": retry_result.get("ended_reason"),
+            "call_id": retry_result.get("call_id"),
+            "first_attempt": result.get("call_id"),
+            "note": "First call ended in silence — auto-retried once",
+        }
+
+    return result
 
 
 def get_github_workflow_status(workflow_file: str = "rollback.yml", wait_for_completion: bool = True) -> dict:
