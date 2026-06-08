@@ -171,19 +171,14 @@ async def vapi_tool_get_incident_status(request: Request):
     if not incident_id:
         return _vapi_result(tool_call_id, "No incident ID in call context.")
 
-    match = next((v for v in _pending.values() if v["incident_id"] == incident_id), None)
+    # Only match a PENDING approval — ignore stale approved/rejected entries from prior sessions
+    pending_match = next((v for v in _pending.values() if v["incident_id"] == incident_id and v["status"] == "pending"), None)
     state_text = _incident_state.get(incident_id, "")
 
-    if not match:
-        result = state_text or "No active approval request found."
-    elif match["status"] == "pending":
+    if pending_match:
         result = f"Waiting on your go-ahead for the rollback. {state_text}".strip()
-    elif match["status"] == "approved":
-        result = f"Rollback approved and in progress. {state_text}".strip()
-    elif match["status"] == "rejected":
-        result = "Rollback was rejected. Standing down."
     else:
-        result = state_text or "Incident response in progress."
+        result = state_text or "Incident response in progress — I'll give you an update shortly."
 
     return _vapi_result(tool_call_id, result)
 

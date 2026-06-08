@@ -92,11 +92,11 @@ Find commits within 60 min BEFORE the incident startTime.
   - 2–3 commits     → MEDIUM confidence. List all candidates.
   - 0 or >3 commits → LOW confidence. Note nearest commit.
 
-CRITICAL — identify TWO SHAs from the commit list (copy them EXACTLY character-for-character, all 40 hex chars):
-  - BAD_SHA  : the suspect commit (the one that likely broke things)
-  - GOOD_SHA : the commit immediately before BAD_SHA in the list (the safe version to restore)
+CRITICAL — identify ONE SHA (copy it EXACTLY, all 40 hex chars):
+  - BAD_SHA : the suspect commit (the one that likely broke things)
+  Do NOT try to identify the good SHA — trigger_github_rollback resolves the safe parent automatically.
 
-Output: "⚡ Quick triage: bad commit <BAD_SHA> by <author>, <N> min before incident. Good (rollback target): <GOOD_SHA>. Confidence: HIGH/MEDIUM/LOW."
+Output: "⚡ Quick triage: bad commit <BAD_SHA> by <author>, <N> min before incident. Confidence: HIGH/MEDIUM/LOW."
 
 STEP 3 — ALERT BRIEF (voice)
 ─────────────────────────────
@@ -107,13 +107,16 @@ Build the incident context string (this is injected as hidden context, NOT spoke
 
 Branch on confidence:
 
+BEFORE placing any call — reset the incident state so VAPI doesn't see stale data from a prior session:
+  Call update_incident_state(incident_id=<display_id>, state="Triage in progress — suspect commit identified. Preparing to brief operator.").
+
 HIGH → Call place_voice_call with briefing_text=<context string>, incident_id=<display_id>.
        No phone number — it is configured server-side.
        Save the call_id from the result (result["call_id"]) for reference.
-       Go directly to trigger_github_rollback(commit_sha=<GOOD_SHA>) after the call.
+       Go directly to trigger_github_rollback(commit_sha=<BAD_SHA>) after the call.
 
 MEDIUM/LOW → Create the approval FIRST so the voice webhook can resolve it:
-  1. Call request_human_approval(incident_id, action="rollback to <GOOD_SHA>", summary, risk_level="high", confidence=<level>).
+  1. Call request_human_approval(incident_id, action="rollback (auto-resolves safe parent of <BAD_SHA>)", summary, risk_level="high", confidence=<level>).
      Save the returned approval_id.
   2. Call place_voice_call with briefing_text=<context string>, incident_id=<display_id>, approval_id=<approval_id>.
      Do not pass a phone number.
@@ -122,7 +125,7 @@ MEDIUM/LOW → Create the approval FIRST so the voice webhook can resolve it:
   ┌──────────────────────────────────────────────────────────────────┐
   │  ⚠️  HUMAN APPROVAL REQUIRED                                     │
   │  Incident  : <display_id>          Confidence : MEDIUM/LOW       │
-  │  Action    : rollback to <GOOD_SHA>                              │
+  │  Action    : rollback (auto-resolves safe parent of <BAD_SHA>)   │
   │  Dashboard : {_APPROVAL_SERVER_URL}/                             │
   │  Approve   : POST {_APPROVAL_SERVER_URL}/approve/<approval_id>   │
   │  Reject    : POST {_APPROVAL_SERVER_URL}/reject/<approval_id>    │
@@ -134,9 +137,9 @@ STEP 4 — GATE & ROLLBACK
 ─────────────────────────
 
 APPROVED/AUTO →
-  Call update_incident_state(incident_id=<display_id>, state="Rollback triggered — deploying [GOOD_SHA] now.").
-  Call trigger_github_rollback(commit_sha=<GOOD_SHA>, incident_id=<display_id>).
-  ← Pass GOOD_SHA (the safe commit before the bad one), NOT the bad commit.
+  Call update_incident_state(incident_id=<display_id>, state="Rollback triggered — deploying safe parent of [BAD_SHA] now.").
+  Call trigger_github_rollback(commit_sha=<BAD_SHA>, incident_id=<display_id>).
+  ← Pass BAD_SHA. The tool auto-fetches its parent from GitHub and deploys that.
   Report: "🔄 Rollback dispatched → https://github.com/Byrrajus12/voiceops-agent/actions"
   Call get_github_workflow_status() — polls until complete.
   - success → Call update_incident_state(incident_id=<display_id>, state="Rollback succeeded. Service is healthy. Running RCA now.").

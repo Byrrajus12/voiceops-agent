@@ -242,8 +242,9 @@ def create_github_issue(incident_id: str, title: str, body: str) -> dict:
 def trigger_github_rollback(commit_sha: str, incident_id: str) -> dict:
     """Trigger the GitHub Actions rollback workflow via workflow_dispatch.
 
-    Pass the LAST KNOWN GOOD commit SHA (the commit immediately before the bad one).
-    The workflow checks out that SHA and deploys it — restoring the safe version of the code.
+    Pass the BAD commit SHA (the suspect commit that caused the incident).
+    This tool automatically fetches its parent from GitHub and deploys that instead —
+    no need to identify the good SHA manually.
     Returns immediately — the workflow runs asynchronously in GitHub Actions.
     """
     headers = {
@@ -251,10 +252,29 @@ def trigger_github_rollback(commit_sha: str, incident_id: str) -> dict:
         "Accept": "application/vnd.github.v3+json",
     }
     owner, repo = GITHUB_REPO.split("/", 1)
+
+    # Resolve parent of bad commit via GitHub API — reliable, no LLM guessing
+    try:
+        commit_resp = requests.get(
+            f"https://api.github.com/repos/{owner}/{repo}/commits/{commit_sha}",
+            headers=headers,
+            timeout=30,
+        )
+    except requests.RequestException as e:
+        return {"error": f"Network error fetching commit info: {e}"}
+
+    if commit_resp.status_code != 200:
+        return {"error": f"GitHub API returned {commit_resp.status_code} fetching commit {commit_sha}"}
+
+    parents = commit_resp.json().get("parents", [])
+    if not parents:
+        return {"error": f"Commit {commit_sha} has no parent — cannot compute rollback target"}
+    good_sha = parents[0]["sha"]
+
     payload = {
         "ref": "main",
         "inputs": {
-            "rollback_to": commit_sha,
+            "rollback_to": good_sha,
             "incident_id": incident_id,
             "triggered_by": "voiceops-agent",
         },
@@ -273,7 +293,8 @@ def trigger_github_rollback(commit_sha: str, incident_id: str) -> dict:
         return {
             "status": "triggered",
             "workflow": "rollback.yml",
-            "rollback_to": commit_sha,
+            "bad_commit": commit_sha,
+            "rollback_to": good_sha,
             "incident_id": incident_id,
             "repo": GITHUB_REPO,
             "actions_url": f"https://github.com/{GITHUB_REPO}/actions",
