@@ -443,9 +443,10 @@ def update_incident_state(incident_id: str, state: str) -> dict:
 def send_voice_update(call_id: str, message: str) -> dict:
     """Speak a milestone update into an active VAPI call immediately — even during silence.
 
-    Uses VAPI's Live Call Control 'say' command which bypasses the LLM and streams
-    the utterance directly to TTS. The operator hears it without asking.
-    If the call has already ended this returns an error — that's fine, keep going.
+    Uses VAPI's Live Call Control 'say' command. The control endpoint is a per-call
+    WebSocket URL returned by VAPI at call creation (monitor.controlUrl) — it is NOT
+    a standard REST path. We fetch it from the call object before posting.
+    If the call has already ended this returns a skip — that's fine, keep going.
     """
     if not VAPI_API_KEY or not call_id:
         return {"status": "skipped", "reason": "no VAPI_API_KEY or call_id"}
@@ -454,11 +455,28 @@ def send_voice_update(call_id: str, message: str) -> dict:
         "Authorization": f"Bearer {VAPI_API_KEY}",
         "Content-Type": "application/json",
     }
+
+    # Fetch the call to get its controlUrl (unique per-call WebSocket control endpoint)
+    try:
+        call_resp = requests.get(
+            f"https://api.vapi.ai/call/{call_id}",
+            headers=headers,
+            timeout=10,
+        )
+        if call_resp.status_code != 200:
+            return {"status": "error", "detail": f"Could not fetch call: HTTP {call_resp.status_code}"}
+        control_url = (call_resp.json().get("monitor") or {}).get("controlUrl")
+        if not control_url:
+            return {"status": "skipped", "reason": "no controlUrl — call may have ended"}
+    except requests.RequestException as e:
+        return {"status": "error", "error": str(e)}
+
+    # POST the say command to the control URL
     try:
         resp = requests.post(
-            f"https://api.vapi.ai/call/{call_id}/control",
+            control_url,
             headers=headers,
-            json={"command": "say", "utterance": message},
+            json={"type": "say", "content": message, "endCallAfterSpoken": False},
             timeout=10,
         )
         if resp.status_code in (200, 201, 204):
