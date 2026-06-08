@@ -14,7 +14,7 @@ from agent.tools import (  # noqa: E402
     generate_voice_briefing,
     get_commit_diff,
     place_voice_call,
-    send_voice_update,
+    update_incident_state,
     get_github_workflow_status,
     get_recent_github_commits,
     poll_approval_status,
@@ -66,7 +66,7 @@ You have access to:
   get_entity_id, ask_dynatrace_docs, find_troubleshooting_guides, adaptive_anomaly_detector
 - GitHub tools: get_recent_github_commits, get_commit_diff, create_github_issue,
   trigger_github_rollback, get_github_workflow_status, close_github_issue
-- Ops tools: place_voice_call, send_voice_update, generate_voice_briefing, request_human_approval, poll_approval_status
+- Ops tools: place_voice_call, update_incident_state, generate_voice_briefing, request_human_approval, poll_approval_status
 
 PRIORITY: MITIGATE FIRST. Stop the bleeding before investigating. RCA and impact analysis happen
 AFTER the service is restored — never block remediation waiting for analysis.
@@ -105,7 +105,7 @@ Branch on confidence:
 
 HIGH → Call place_voice_call with briefing_text=<context string>, incident_id=<display_id>.
        No phone number — it is configured server-side.
-       Save the call_id from the result (result["call_id"]) — you'll use it for send_voice_update.
+       Save the call_id from the result (result["call_id"]) for reference.
        Go directly to trigger_github_rollback after the call.
 
 MEDIUM/LOW → Create the approval FIRST so the voice webhook can resolve it:
@@ -130,13 +130,13 @@ STEP 4 — GATE & ROLLBACK
 ─────────────────────────
 
 APPROVED/AUTO →
-  Call send_voice_update(call_id, "Triggering the rollback now, stay on the line.") if call_id is set.
+  Call update_incident_state(incident_id=<display_id>, state="Rollback triggered — deploying parent of [sha] now.").
   Call trigger_github_rollback(commit_sha=<FULL sha>, incident_id=<display_id>).
   Report: "🔄 Rollback dispatched → https://github.com/Byrrajus12/voiceops-agent/actions"
   Call get_github_workflow_status() — polls until complete.
-  - success → Call send_voice_update(call_id, "Rollback's deployed, health check passed. Service is back up.") if call_id is set.
+  - success → Call update_incident_state(incident_id=<display_id>, state="Rollback succeeded. Service is healthy. Running RCA now.").
               "✅ Rollback succeeded."
-  - failure → Call send_voice_update(call_id, "Rollback workflow failed — I need to look at this manually.") if call_id is set.
+  - failure → Call update_incident_state(incident_id=<display_id>, state="Rollback workflow failed — manual intervention needed.").
               "⚠️ Rollback FAILED — manual intervention needed. Stopping."
 
 STEP 4b — CONFIRM RESOLUTION
@@ -204,9 +204,9 @@ Output:
 
 STEP 7 — CLOSE & REPORT
 ─────────────────────────
-1. If call_id is set, push the RCA summary:
-   Call send_voice_update(call_id,
-     "RCA done — [one sentence: what the commit changed and why it caused the issue]. Filing the report on GitHub now.")
+1. Update incident state with RCA summary so operator gets it when they ask:
+   Call update_incident_state(incident_id=<display_id>,
+     state="RCA done — [one sentence: what the commit changed and why it caused the issue]. Filing GitHub report now.")
 
 2. Call create_github_issue to create a post-incident report (separate from the triage issue) with:
    title: "POST-INCIDENT REPORT [<display_id>]: <title>"
@@ -214,9 +214,9 @@ STEP 7 — CLOSE & REPORT
 
 3. Call close_github_issue on the original triage issue with comment: "✅ Resolved. See post-incident report for full RCA."
 
-4. If call_id is set, send the wrap-up:
-   Call send_voice_update(call_id, "All wrapped up. Post-incident report is on GitHub. We're good.")
-   (The VAPI assistant wraps up the conversation naturally — no need to initiate a second call.)
+4. Final state update:
+   Call update_incident_state(incident_id=<display_id>, state="All done. Post-incident report filed on GitHub. Incident closed.")
+   (The VAPI assistant wraps up the conversation naturally when the operator next asks for status.)
 
 Print final summary:
 ┌────────────────────────────────────────────────────────┐
@@ -243,7 +243,7 @@ RULES
         create_github_issue,
         generate_voice_briefing,
         place_voice_call,
-        send_voice_update,
+        update_incident_state,
         request_human_approval,
         poll_approval_status,
         trigger_github_rollback,

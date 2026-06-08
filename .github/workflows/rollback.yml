@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       rollback_to:
-        description: "Commit SHA to roll back to"
+        description: "SHA of the bad commit to revert (we deploy its parent)"
         required: true
         type: string
       incident_id:
@@ -31,17 +31,23 @@ jobs:
       id-token: write
 
     steps:
-      - name: Checkout target commit
+      - name: Checkout repository (full history)
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.rollback_to }}
           fetch-depth: 0
+
+      - name: Resolve good parent commit
+        run: |
+          PARENT=$(git rev-parse "${{ inputs.rollback_to }}^")
+          git checkout "$PARENT"
+          echo "PARENT_SHA=$PARENT" >> $GITHUB_ENV
 
       - name: Display rollback context
         run: |
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "  ROLLBACK INITIATED"
-          echo "  Target SHA   : ${{ inputs.rollback_to }}"
+          echo "  Bad commit   : ${{ inputs.rollback_to }}"
+          echo "  Deploying    : ${{ env.PARENT_SHA }}"
           echo "  Incident ID  : ${{ inputs.incident_id }}"
           echo "  Triggered by : ${{ inputs.triggered_by }}"
           echo "  Timestamp    : $(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -63,7 +69,7 @@ jobs:
 
       - name: Build and push image
         run: |
-          IMAGE="gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE }}:${{ inputs.rollback_to }}"
+          IMAGE="gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE }}:${{ env.PARENT_SHA }}"
           docker build ./target-service --tag "$IMAGE"
           docker push "$IMAGE"
           echo "IMAGE=$IMAGE" >> $GITHUB_ENV
@@ -96,5 +102,5 @@ jobs:
       - name: Summary
         run: |
           echo ""
-          echo "✅ Rollback to ${{ inputs.rollback_to }} deployed and verified healthy."
+          echo "✅ Rolled back FROM ${{ inputs.rollback_to }} TO ${{ env.PARENT_SHA }} — verified healthy."
           echo "   Incident ${{ inputs.incident_id }} should now be resolving in Dynatrace."

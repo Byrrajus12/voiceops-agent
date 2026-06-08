@@ -299,8 +299,9 @@ def _dispatch_vapi_call(payload: dict, headers: dict) -> dict | None:
         r = requests.post("https://api.vapi.ai/call/phone", headers=headers, json=payload, timeout=30)
         if r.status_code in (200, 201, 202, 204):
             return r.json()
-    except Exception:
-        pass
+        print(f"[vapi] dispatch failed: HTTP {r.status_code} — {r.text[:500]}", flush=True)
+    except Exception as e:
+        print(f"[vapi] dispatch exception: {e}", flush=True)
     return None
 
 
@@ -345,11 +346,10 @@ def place_voice_call(
         "customer": {"number": to_number or VAPI_CALLER_NUMBER},
         "assistantOverrides": {
             "firstMessage": "Hey, VoiceOps here.",
-            "model": {
-                # Hidden context injected before the call starts — VAPI LLM reads this,
-                # speaks about the incident naturally, not as a literal recitation
-                "messages": [{"role": "system", "content": briefing_text}]
-            },
+            # variableValues fills {{incident_context}} in the assistant's system prompt
+            # so the LLM has the full incident details without reading them aloud
+            "variableValues": {"incident_context": briefing_text},
+            "silenceTimeoutSeconds": 60,
         },
         "metadata": metadata,
     }
@@ -397,6 +397,25 @@ def place_voice_call(
         }
 
     return result
+
+
+def update_incident_state(incident_id: str, state: str) -> dict:
+    """Post the current agent activity to the approval server so VAPI can relay it to the operator.
+
+    Call this at each milestone: rollback triggered, rollback done, RCA progress, etc.
+    The VAPI get_incident_status tool reads this state when the operator asks for updates.
+    """
+    try:
+        resp = requests.post(
+            f"{APPROVAL_SERVER}/incident/{incident_id}/state",
+            json={"state": state},
+            timeout=10,
+        )
+        if resp.status_code == 200:
+            return {"status": "ok", "incident_id": incident_id}
+        return {"status": "error", "code": resp.status_code}
+    except requests.RequestException as e:
+        return {"status": "error", "error": str(e)}
 
 
 def send_voice_update(call_id: str, message: str) -> dict:
