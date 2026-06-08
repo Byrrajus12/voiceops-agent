@@ -57,15 +57,36 @@ cmd_status() {
 }
 
 cmd_break() {
-  log "\nBreaking target service (BROKEN=true)..."
+  local mode="${1:-crash}"
+  local valid_modes="crash slow auth_error db_timeout dependency"
+  if ! echo "$valid_modes" | grep -qw "$mode"; then
+    err "Unknown failure mode: $mode"
+    echo "  Valid modes: $valid_modes"
+    echo ""
+    echo "  crash      → HTTP 500 MissingWebhookSecret (AVAILABILITY)"
+    echo "  slow       → 8-15s timeout on all requests (PERFORMANCE)"
+    echo "  auth_error → HTTP 401 invalid token (ERROR_RATE)"
+    echo "  db_timeout → HTTP 503 DB pool exhausted with stack trace (AVAILABILITY)"
+    echo "  dependency → HTTP 502 downstream service unreachable (AVAILABILITY)"
+    exit 1
+  fi
+
+  log "\nBreaking target service (BROKEN=true, FAILURE_MODE=$mode)..."
   gcloud run services update "$TARGET_SVC" \
     --region "$REGION" \
     --project "$PROJECT" \
-    --update-env-vars "BROKEN=true" \
+    --update-env-vars "BROKEN=true,FAILURE_MODE=$mode" \
     --quiet
-  ok "Target service is now broken"
+  ok "Target service is now broken — mode: $mode"
+  echo ""
+  case "$mode" in
+    crash)      info "Failure: HTTP 500 MissingWebhookSecret on /voice-agent/session/start" ;;
+    slow)       info "Failure: 8-15s delays → Dynatrace PERFORMANCE degradation" ;;
+    auth_error) info "Failure: HTTP 401 invalid JWT on session start" ;;
+    db_timeout) info "Failure: HTTP 503 DB pool exhausted with stack trace" ;;
+    dependency) info "Failure: HTTP 502 notification-service unreachable" ;;
+  esac
   info "Dynatrace Synthetic Monitor polls every ~1 min → Davis AI problem will fire in 2–3 min"
-  info "Watch: $AGENT_URL"
   echo ""
   warn "Run the agent once a problem appears:"
   echo "  Prompt: 'Check for active incidents and run the full incident response workflow.'"
@@ -92,7 +113,7 @@ cmd_demo() {
   cmd_status
 
   log "Step 2 — Break the target service"
-  cmd_break
+  cmd_break "${1:-crash}"
 
   echo ""
   log "Step 3 — Wait for Dynatrace to detect the incident"
@@ -265,7 +286,7 @@ cmd_help() {
   echo ""
   echo "Demo commands:"
   echo "  demo                   Full guided demo flow (break → wait → run agent)"
-  echo "  break                  Set target service BROKEN=true on Cloud Run"
+  echo "  break [mode]           Break service on Cloud Run (modes: crash slow auth_error db_timeout dependency)"
   echo "  fix                    Set target service BROKEN=false on Cloud Run"
   echo "  approve <incident_id>  Approve a pending rollback via the approval server"
   echo "  reject  <incident_id>  Reject a pending rollback"
@@ -284,7 +305,7 @@ shift || true
 
 case "$CMD" in
   demo)    cmd_demo ;;
-  break)   cmd_break ;;
+  break)   cmd_break "${1:-crash}" ;;
   fix)     cmd_fix ;;
   status)  cmd_status ;;
   approve) cmd_approve "${1:-}" ;;

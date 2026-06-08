@@ -12,6 +12,8 @@ from agent.tools import (  # noqa: E402
     close_github_issue,
     create_github_issue,
     generate_voice_briefing,
+    get_commit_diff,
+    get_service_logs,
     place_voice_call,
     get_github_workflow_status,
     get_recent_github_commits,
@@ -62,8 +64,9 @@ root_agent = Agent(
 You have access to:
 - Dynatrace MCP tools: query_problems, get_problem_by_id, execute_dql, create_dql, get_entity_name,
   get_entity_id, ask_dynatrace_docs, find_troubleshooting_guides, adaptive_anomaly_detector
-- GitHub tools: get_recent_github_commits, create_github_issue, trigger_github_rollback,
-  get_github_workflow_status, close_github_issue
+- GitHub tools: get_recent_github_commits, get_commit_diff, create_github_issue,
+  trigger_github_rollback, get_github_workflow_status, close_github_issue
+- Log tools: get_service_logs (actual Dynatrace log lines — error messages, stack traces)
 - Ops tools: place_voice_call, generate_voice_briefing, request_human_approval, poll_approval_status
 
 PRIORITY: MITIGATE FIRST. Stop the bleeding before investigating. RCA and impact analysis happen
@@ -145,21 +148,33 @@ Only run this AFTER the incident is confirmed resolved above.
 
 STEP 5 — ROOT CAUSE ANALYSIS
 ──────────────────────────────
-Now do the deep investigation you skipped during triage.
+Now do the deep investigation you skipped during triage. The goal is to explain WHY it broke,
+not just WHEN — use actual logs and code, not just metrics.
 
-A) SIGNAL ANALYSIS
-   Use create_dql to query error rates, HTTP 5xx counts, and response time spikes for the
-   affected entity in the 30-min window around incident startTime. Run with execute_dql.
-   Call adaptive_anomaly_detector with a timeseries query to pinpoint exactly when the anomaly
-   first emerged and confirm it aligns with the suspect commit timestamp.
+A) READ THE ACTUAL ERROR LOGS
+   Call get_service_logs(entity_id=<affected_entity_id>, minutes_back=30).
+   This returns real error log lines from Dynatrace — exception types, stack traces, error messages.
+   Quote the key error message verbatim: "Exact error: <log content>"
+   This is the most direct evidence of what failed.
 
-B) DOCUMENTATION
-   Call ask_dynatrace_docs with the problem category/title to explain the failure mode.
-   Call find_troubleshooting_guides for known remediation patterns for this type of issue.
+B) READ THE ACTUAL CODE DIFF
+   Call get_commit_diff(commit_sha=<full sha of suspect commit>).
+   This shows the actual file changes — what lines were added/removed.
+   Look for: removed validation, changed error handling, config changes, renamed fields.
+   Quote the specific changed line(s) that match the log error.
+   "The diff shows line X was removed from file Y, which explains error Z."
 
-C) VERDICT
-   "🔍 Root Cause: commit <sha> — <message>. DQL confirms error rate spiked at <time>,
-    <N> min after deploy. Anomaly detector confirms deviation from baseline at <time>."
+C) METRIC SIGNAL (confirm the timeline)
+   Use create_dql + execute_dql to confirm error rate spiked at the same time the commit was deployed.
+   Call adaptive_anomaly_detector to show the deviation start time.
+
+D) DOCUMENTATION
+   Call ask_dynatrace_docs with the problem category/title.
+   Call find_troubleshooting_guides for remediation patterns.
+
+E) VERDICT — connect logs → code → metrics into a single sentence:
+   "🔍 Root Cause: commit <sha> removed <X> from <file>, causing <exact error from logs>.
+    Error rate spiked at <time> confirming deploy-time regression. Confidence: HIGH."
 
 STEP 6 — IMPACT ANALYSIS
 ──────────────────────────
@@ -210,6 +225,8 @@ RULES
     tools=[
         dynatrace_mcp,
         get_recent_github_commits,
+        get_commit_diff,
+        get_service_logs,
         create_github_issue,
         generate_voice_briefing,
         place_voice_call,
