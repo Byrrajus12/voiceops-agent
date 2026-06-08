@@ -26,10 +26,21 @@ async def main(prompt: str) -> None:
         session_id=session.id,
         new_message=message,
     ):
-        if hasattr(event, "content") and event.content:
-            for part in event.content.parts:
-                if hasattr(part, "text") and part.text:
-                    print(part.text, flush=True)
+        if not hasattr(event, "content") or not event.content:
+            continue
+        for part in event.content.parts:
+            if hasattr(part, "text") and part.text:
+                print(part.text, flush=True)
+            elif hasattr(part, "function_call") and part.function_call:
+                fc = part.function_call
+                args = dict(fc.args) if fc.args else {}
+                # Truncate long args for readability
+                display = {k: (str(v)[:80] + "…" if len(str(v)) > 80 else v) for k, v in args.items()}
+                print(f"\n→ TOOL CALL: {fc.name}({display})", flush=True)
+            elif hasattr(part, "function_response") and part.function_response:
+                fr = part.function_response
+                resp = str(fr.response)[:200]
+                print(f"← TOOL RESULT: {fr.name}: {resp}…" if len(str(fr.response)) > 200 else f"← TOOL RESULT: {fr.name}: {fr.response}", flush=True)
     print(f"{'─' * 60}\n[voiceops] Done.")
 
 
