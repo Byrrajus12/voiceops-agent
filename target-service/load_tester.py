@@ -1,20 +1,24 @@
-"""Continuous load tester — sends checkout requests and reports error rates."""
+"""Continuous load tester — sends session start requests and reports error rates."""
 import asyncio
 import random
 import sys
 import time
+import uuid
 
 import aiohttp
 
 
 async def send_request(session: aiohttp.ClientSession, url: str) -> int:
     payload = {
-        "user_id": f"user_{random.randint(1, 10000)}",
-        "items": [f"item_{random.choice(['alpha', 'beta', 'gamma', 'delta'])}"],
-        "total": round(random.uniform(9.99, 999.99), 2),
+        "session_id": str(uuid.uuid4()),
+        "metadata": {"source": "load-tester", "user": f"user_{random.randint(1, 10000)}"},
     }
     try:
-        async with session.post(f"{url}/checkout", json=payload, timeout=aiohttp.ClientTimeout(total=5)) as resp:
+        async with session.post(
+            f"{url}/voice-agent/session/start",
+            json=payload,
+            timeout=aiohttp.ClientTimeout(total=20),
+        ) as resp:
             return resp.status
     except Exception:
         return 0

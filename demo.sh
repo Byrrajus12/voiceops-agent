@@ -62,69 +62,107 @@ cmd_break() {
   if ! echo "$valid_modes" | grep -qw "$mode"; then
     err "Unknown failure mode: $mode"
     echo ""
-    echo "  crash      → HTTP 500 MissingWebhookSecret (AVAILABILITY)"
-    echo "  slow       → 8-15s timeout on all requests (PERFORMANCE)"
-    echo "  auth_error → HTTP 401 invalid JWT (ERROR_RATE)"
-    echo "  db_timeout → HTTP 503 DB pool exhausted + stack trace (AVAILABILITY)"
-    echo "  dependency → HTTP 502 downstream service unreachable (AVAILABILITY)"
+    echo "  crash      → HTTP 500 webhook_secret validation added (AVAILABILITY)"
+    echo "  slow       → 8-15s timeouts (PERFORMANCE)"
+    echo "  auth_error → HTTP 401 JWT error (ERROR_RATE)"
+    echo "  db_timeout → HTTP 503 DB pool exhausted (AVAILABILITY)"
+    echo "  dependency → HTTP 502 downstream unavailable (AVAILABILITY)"
     exit 1
   fi
 
-  # ── Step 1: Push a "bad" commit so the agent has a real commit to find ──────
-  log "\nStep 1 — Pushing a bad deploy commit to the repo..."
+  # ── Step 1: commit the real broken code (crash) or a marker (other modes) ──
+  log "\nStep 1 — Committing bad deploy to repo..."
 
-  # Write a marker file in target-service/ so the commit touches the right directory
-  local marker="target-service/.demo-deploy"
   local commit_msg=""
   case "$mode" in
-    crash)      commit_msg="Update voice-agent session handler: remove webhook_secret validation" ;;
-    slow)       commit_msg="Refactor session DB queries: switch to synchronous connection pool" ;;
-    auth_error) commit_msg="Rotate voice-agent JWT signing key: update token validation config" ;;
-    db_timeout) commit_msg="Increase session connection pool size: update pool config params" ;;
-    dependency) commit_msg="Update notification-service endpoint: migrate to new internal URL" ;;
+    crash)
+      commit_msg="Security: enforce webhook_secret validation on all session requests"
+      # Deploy the real broken session_handler — this is what actually causes failures
+      cp target-service/demo-scenarios/crash_bad.py target-service/session_handler.py
+      git add target-service/session_handler.py
+      ;;
+    slow)
+      commit_msg="Refactor session DB queries: switch to synchronous connection pool"
+      echo "FAILURE_MODE=slow | deployed=$(date -u +%Y-%m-%dT%H:%M:%SZ)" > target-service/.demo-deploy
+      git add target-service/.demo-deploy
+      ;;
+    auth_error)
+      commit_msg="Rotate voice-agent JWT signing key: update token validation config"
+      echo "FAILURE_MODE=auth_error | deployed=$(date -u +%Y-%m-%dT%H:%M:%SZ)" > target-service/.demo-deploy
+      git add target-service/.demo-deploy
+      ;;
+    db_timeout)
+      commit_msg="Increase session connection pool size: update pool config params"
+      echo "FAILURE_MODE=db_timeout | deployed=$(date -u +%Y-%m-%dT%H:%M:%SZ)" > target-service/.demo-deploy
+      git add target-service/.demo-deploy
+      ;;
+    dependency)
+      commit_msg="Update notification-service endpoint: migrate to new internal URL"
+      echo "FAILURE_MODE=dependency | deployed=$(date -u +%Y-%m-%dT%H:%M:%SZ)" > target-service/.demo-deploy
+      git add target-service/.demo-deploy
+      ;;
   esac
 
-  echo "FAILURE_MODE=$mode | deployed=$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$marker"
-  git add "$marker"
   git commit -m "$commit_msg"
   git push origin main
   ok "Bad deploy commit pushed: \"$commit_msg\""
 
-  # ── Step 2: Break the Cloud Run service ─────────────────────────────────────
-  log "\nStep 2 — Flipping BROKEN=true on Cloud Run (mode=$mode)..."
-  gcloud run services update "$TARGET_SVC" \
-    --region "$REGION" \
-    --project "$PROJECT" \
-    --update-env-vars "BROKEN=true,FAILURE_MODE=$mode" \
-    --quiet
+  # ── Step 2: Deploy to Cloud Run ─────────────────────────────────────────────
+  log "\nStep 2 — Deploying to Cloud Run (~3 min)..."
 
-  ok "Target service is now broken — mode: $mode"
+  if [ "$mode" = "crash" ]; then
+    # Real broken code deploy — no BROKEN env var needed
+    gcloud run deploy "$TARGET_SVC" \
+      --source ./target-service \
+      --region "$REGION" \
+      --project "$PROJECT" \
+      --set-env-vars "BROKEN=false,FAILURE_MODE=" \
+      --quiet
+  else
+    # Env-var-based failure mode
+    gcloud run services update "$TARGET_SVC" \
+      --region "$REGION" \
+      --project "$PROJECT" \
+      --update-env-vars "BROKEN=true,FAILURE_MODE=$mode" \
+      --quiet
+  fi
+
+  ok "Target service deployed — mode: $mode"
   echo ""
   case "$mode" in
-    crash)      info "Failure: HTTP 500 MissingWebhookSecret on /voice-agent/session/start" ;;
+    crash)      info "Real code: webhook_secret now required → synthetic monitor gets HTTP 500" ;;
     slow)       info "Failure: 8-15s delays → Dynatrace PERFORMANCE degradation" ;;
-    auth_error) info "Failure: HTTP 401 invalid JWT on session start" ;;
+    auth_error) info "Failure: HTTP 401 JWT validation fails" ;;
     db_timeout) info "Failure: HTTP 503 DB pool exhausted with stack trace" ;;
     dependency) info "Failure: HTTP 502 notification-service unreachable" ;;
   esac
-  info "Dynatrace Synthetic Monitor polls every ~1 min → Davis AI problem will fire in 2–3 min"
+  info "Dynatrace Synthetic Monitor polls every ~1 min → Davis AI problem fires in 2–3 min"
   echo ""
-  warn "Run the agent once a problem appears:"
+  warn "Run the agent once the problem appears:"
   echo "  Prompt: 'Check for active incidents and run the full incident response workflow.'"
-  echo ""
-  info "The agent will find commit: \"$commit_msg\""
-  info "get_commit_diff will show the marker file change — that's the 'bad deploy'."
 }
 
 cmd_fix() {
-  log "\nRestoring target service (BROKEN=false)..."
-  gcloud run services update "$TARGET_SVC" \
+  log "\nRestoring target service (manual fix — bypasses agent rollback)..."
+
+  # Restore the good session_handler if the crash scenario left the bad one in place
+  if grep -q "webhook_secret is required" target-service/session_handler.py 2>/dev/null; then
+    info "Restoring good session_handler.py..."
+    git checkout HEAD -- target-service/session_handler.py 2>/dev/null || \
+      git show main:target-service/session_handler.py > target-service/session_handler.py
+    git add target-service/session_handler.py
+    git commit -m "Revert: restore session_handler to safe version (manual fix)"
+    git push origin main
+  fi
+
+  gcloud run deploy "$TARGET_SVC" \
+    --source ./target-service \
     --region "$REGION" \
     --project "$PROJECT" \
-    --update-env-vars "BROKEN=false" \
+    --set-env-vars "BROKEN=false,FAILURE_MODE=" \
     --quiet
-  ok "Target service restored"
-  info "Dynatrace should close the problem within 1–2 min"
+  ok "Target service restored and redeployed"
+  info "Dynatrace should close the problem within 2–3 min"
 }
 
 cmd_demo() {
