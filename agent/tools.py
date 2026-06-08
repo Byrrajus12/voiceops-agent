@@ -371,7 +371,6 @@ def place_voice_call(
             # variableValues fills {{incident_context}} in the assistant's system prompt
             # so the LLM has the full incident details without reading them aloud
             "variableValues": {"incident_context": briefing_text},
-            "silenceTimeoutSeconds": 60,
         },
         "metadata": metadata,
     }
