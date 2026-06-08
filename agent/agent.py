@@ -229,8 +229,8 @@ STEP 7 — CLOSE & REPORT
 
 4. Final state update:
    Call update_incident_state(incident_id=<display_id>, state="All done. Post-incident report filed on GitHub. Incident closed.")
-   Call send_voice_update(call_id=<call_id>, message="All wrapped up — report's on GitHub and the incident's officially closed. You're all good.").
-   (The call can now end naturally.)
+   Call send_voice_update(call_id=<call_id>, message="We're all done — report's filed and the incident's officially closed. Anything else I can help you with before I let you go?").
+   (VAPI continues listening. Operator can respond, say goodbye, or let silence time out — all handled naturally by the assistant.)
 
 Print final summary:
 ┌────────────────────────────────────────────────────────┐

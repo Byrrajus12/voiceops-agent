@@ -4,7 +4,9 @@
 set -euo pipefail
 
 # ── Config ────────────────────────────────────────────────────────────────────
-GCLOUD="${GCLOUD:-$(command -v gcloud 2>/dev/null || echo /opt/homebrew/share/google-cloud-sdk/bin/gcloud)}"
+# Use bare 'gcloud' from PATH — resolving the full path on Windows produces a path with
+# spaces ("Google Cloud SDK" directory) which breaks bash word-splitting when expanded.
+GCLOUD="${GCLOUD:-gcloud}"
 PROJECT=sreagnt
 REGION=us-central1
 TARGET_SVC=voiceops-target

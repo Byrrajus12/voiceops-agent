@@ -23,15 +23,15 @@ The agent runs in two phases:
 **Phase 1 — Triage & Mitigate** (stop the bleeding first)
 1. Queries Dynatrace Davis AI for open problems
 2. Fetches recent GitHub commits, finds any deployed within 60 min of incident start → confidence score
-3. Places a live VAPI phone call with the incident briefing
-4. HIGH confidence → triggers rollback automatically; MEDIUM/LOW → creates approval request first, places call with `approval_id` in metadata so saying "approve" or pressing 1 on the call resolves it directly; also available via browser dashboard
+3. Places a live VAPI outbound call; pushes proactive status updates to the active call at each milestone via VAPI Live Call Control — operator stays informed without having to ask
+4. HIGH confidence → triggers rollback automatically; MEDIUM/LOW → creates approval request first, places call with `approval_id` in metadata so saying "approve" resolves it directly via VAPI server-side tool; also available via browser dashboard
 5. Polls GitHub Actions until rollback completes, then re-checks Dynatrace to confirm problem closed
 
 **Phase 2 — Post-Incident** (only after service is restored)
 
 6. Runs deep DQL signal analysis + anomaly detection to confirm root cause
 7. Calculates blast radius, failed request count, and error trend
-8. Places a resolution VAPI call, files a post-incident report as a GitHub issue, closes the tracking issue
+8. Sends final voice update to the operator with RCA summary, files a post-incident report as a GitHub issue, closes the tracking issue
 
 ```
 Dynatrace Davis AI
@@ -50,19 +50,22 @@ Dynatrace Davis AI
 │             → place_voice_call (approval_id) │
 │             → trigger_github_rollback        │
 │    get_github_workflow_status (poll)         │
+│    update_incident_state      (state push)   │
+│    send_voice_update          (voice push)   │
 │    query_problems             (verify)       │
 │                                              │
 │  Phase 2 — Post-Incident Analysis            │
 │    create_dql + execute_dql   (signals)      │
 │    adaptive_anomaly_detector                 │
 │    ask_dynatrace_docs                        │
-│    place_voice_call           (resolution)   │
+│    send_voice_update          (milestones)   │
 │    create_github_issue        (PIR)          │
 │    close_github_issue                        │
-└─────────────────┬──────────────┬─────────────┘
-                  │              │
-        GitHub Actions     Approval Server
-        rollback.yml       browser dashboard
+└──────────┬──────────────┬────────────────────┘
+           │              │              │
+  GitHub Actions   Approval Server      VAPI
+  rollback.yml     browser dashboard    ↑ get_incident_status (pull)
+                   VAPI tools           ↓ send_voice_update (push)
 ```
 
 ---
@@ -118,16 +121,17 @@ Open http://localhost:8000, select `incident_commander`, and send:
 
 ## Triggering an Incident (Demo)
 
-To simulate a production incident, deploy the target service with `BROKEN=true`. This makes `POST /voice-agent/session/start` return HTTP 500, which a Dynatrace Synthetic Monitor will detect and escalate to Davis AI.
+Use `demo.sh` to break the target service. `break crash` commits real broken code — a session handler that requires `webhook_secret` on every request — and deploys it to Cloud Run. The Dynatrace Synthetic Monitor gets HTTP 500 and Davis AI escalates to a problem within 2–3 minutes.
 
-To break/fix locally:
 ```bash
-# Simulate failure
-TARGET_SERVICE_URL=http://localhost:9000
-BROKEN=true uvicorn target-service.main:app --port 9000
+# Commit + deploy bad session_handler.py to Cloud Run
+./demo.sh break crash
 
-# The agent prompt once a Davis AI problem appears:
+# Davis AI problem fires in ~2-3 min. Then run the agent:
 # "Check for active incidents and run the full incident response workflow."
+
+# After the agent completes the rollback, or to reset for the next run:
+./demo.sh fix
 ```
 
 ---
@@ -242,7 +246,9 @@ voiceops-agent/
 ├── approval-server/
 │   └── main.py             # FastAPI approval server + VAPI webhook + browser UI
 ├── target-service/
-│   └── main.py             # Demo service — BROKEN=true triggers HTTP 500 + OTel
+│   ├── main.py             # FastAPI demo service with OTel tracing
+│   ├── session_handler.py  # Session lifecycle — crash scenario breaks this file
+│   └── demo-scenarios/     # crash_bad.py (bad) + session_handler_good.py (known-good)
 ├── .github/workflows/
 │   └── rollback.yml        # workflow_dispatch rollback (Docker build + Cloud Run)
 ├── Dockerfile              # Agent image — copies agent/requirements.txt
