@@ -4,6 +4,7 @@
 set -euo pipefail
 
 # ── Config ────────────────────────────────────────────────────────────────────
+GCLOUD="${GCLOUD:-$(command -v gcloud 2>/dev/null || echo /opt/homebrew/share/google-cloud-sdk/bin/gcloud)}"
 PROJECT=sreagnt
 REGION=us-central1
 TARGET_SVC=voiceops-target
@@ -112,7 +113,7 @@ cmd_break() {
 
   if [ "$mode" = "crash" ]; then
     # Real broken code deploy — no BROKEN env var needed
-    gcloud run deploy "$TARGET_SVC" \
+    $GCLOUD run deploy "$TARGET_SVC" \
       --source ./target-service \
       --region "$REGION" \
       --project "$PROJECT" \
@@ -120,7 +121,7 @@ cmd_break() {
       --quiet
   else
     # Env-var-based failure mode
-    gcloud run services update "$TARGET_SVC" \
+    $GCLOUD run services update "$TARGET_SVC" \
       --region "$REGION" \
       --project "$PROJECT" \
       --update-env-vars "BROKEN=true,FAILURE_MODE=$mode" \
@@ -148,14 +149,15 @@ cmd_fix() {
   # Restore the good session_handler if the crash scenario left the bad one in place
   if grep -q "webhook_secret is required" target-service/session_handler.py 2>/dev/null; then
     info "Restoring good session_handler.py..."
-    git checkout HEAD -- target-service/session_handler.py 2>/dev/null || \
-      git show main:target-service/session_handler.py > target-service/session_handler.py
+    cp target-service/demo-scenarios/session_handler_good.py target-service/session_handler.py
     git add target-service/session_handler.py
     git commit -m "Revert: restore session_handler to safe version (manual fix)"
     git push origin main
+  else
+    info "session_handler.py already healthy — skipping commit"
   fi
 
-  gcloud run deploy "$TARGET_SVC" \
+  $GCLOUD run deploy "$TARGET_SVC" \
     --source ./target-service \
     --region "$REGION" \
     --project "$PROJECT" \
@@ -281,7 +283,7 @@ cmd_local() {
 cmd_logs() {
   local svc="${1:-$AGENT_SVC}"
   log "\nStreaming logs for $svc ..."
-  gcloud run services logs read "$svc" \
+  $GCLOUD run services logs read "$svc" \
     --region "$REGION" \
     --project "$PROJECT" \
     --limit 50
@@ -293,10 +295,10 @@ cmd_deploy() {
 
   deploy_agent() {
     info "Building and deploying agent ..."
-    gcloud builds submit . \
+    $GCLOUD builds submit . \
       --tag "gcr.io/$PROJECT/$AGENT_SVC:latest" \
       --project "$PROJECT"
-    gcloud run deploy "$AGENT_SVC" \
+    $GCLOUD run deploy "$AGENT_SVC" \
       --image "gcr.io/$PROJECT/$AGENT_SVC:latest" \
       --region "$REGION" \
       --project "$PROJECT" \
@@ -306,10 +308,10 @@ cmd_deploy() {
 
   deploy_approval() {
     info "Building and deploying approval server ..."
-    gcloud builds submit ./approval-server \
+    $GCLOUD builds submit ./approval-server \
       --tag "gcr.io/$PROJECT/$APPROVAL_SVC:latest" \
       --project "$PROJECT"
-    gcloud run deploy "$APPROVAL_SVC" \
+    $GCLOUD run deploy "$APPROVAL_SVC" \
       --image "gcr.io/$PROJECT/$APPROVAL_SVC:latest" \
       --region "$REGION" \
       --project "$PROJECT" \
@@ -319,10 +321,10 @@ cmd_deploy() {
 
   deploy_target() {
     info "Building and deploying target service ..."
-    gcloud builds submit ./target-service \
+    $GCLOUD builds submit ./target-service \
       --tag "gcr.io/$PROJECT/$TARGET_SVC:latest" \
       --project "$PROJECT"
-    gcloud run deploy "$TARGET_SVC" \
+    $GCLOUD run deploy "$TARGET_SVC" \
       --image "gcr.io/$PROJECT/$TARGET_SVC:latest" \
       --region "$REGION" \
       --project "$PROJECT" \
