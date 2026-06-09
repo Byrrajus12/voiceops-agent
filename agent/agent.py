@@ -23,7 +23,7 @@ from agent.tools import (  # noqa: E402
     trigger_github_rollback,
 )
 
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.0-flash")
 _APPROVAL_SERVER_URL = os.getenv("APPROVAL_SERVER_URL", "http://localhost:8080")
 
 # Dynatrace MCP Gateway — hosted remote endpoint using Streamable HTTP transport.
