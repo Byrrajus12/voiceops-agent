@@ -31,6 +31,10 @@ application_default_credentials.json
 # Session test data (may contain personal info)
 agent/test-data/
 
+# Local-only planning/notes
+voice-layer-brainstorm.md
+HACKATHON_PLAN.md
+
 # Audio output
 *.mp3
 *.wav

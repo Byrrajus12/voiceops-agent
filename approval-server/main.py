@@ -1,8 +1,10 @@
+import os
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException, Query, Request
+import httpx
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
@@ -11,6 +13,10 @@ app = FastAPI(title="VoiceOps Approval Server")
 _pending: dict[str, dict] = {}
 _decisions: dict[str, dict] = {}
 _incident_state: dict[str, str] = {}  # incident_id → last known agent activity text
+_active_dt_sessions: dict[str, str] = {}  # problem_id → session_id (dedup guard)
+_dt_trigger_log: list[dict] = []  # recent DT webhook triggers for dashboard display
+
+_AGENT_URL = os.getenv("AGENT_URL", "https://voiceops-agent-224808509436.us-central1.run.app")
 
 
 class ApprovalRequest(BaseModel):
@@ -227,6 +233,97 @@ async def vapi_tool_reject_rollback(request: Request):
     return _vapi_result(tool_call_id, "Understood — standing down on the rollback.")
 
 
+async def _trigger_agent(session_id: str, problem_id: str) -> None:
+    """Background task: create ADK session then stream the run to completion.
+
+    Drains the SSE stream line-by-line so the agent keeps running —
+    ADK aborts if the client disconnects before the run finishes.
+    """
+    app_name = "agent"  # ADK names the app after the directory, not root_agent.name
+    user_id = "dynatrace-webhook"
+    prompt = "Check for active incidents and run the full incident response workflow."
+
+    try:
+        # 60s timeout — Cloud Run cold starts can take 15-30s
+        async with httpx.AsyncClient(timeout=60.0) as c:
+            await c.post(
+                f"{_AGENT_URL}/apps/{app_name}/users/{user_id}/sessions/{session_id}",
+                json={},
+            )
+
+        # No read timeout — agent takes 10-15 min; 1200s gives plenty of headroom
+        async with httpx.AsyncClient() as c:
+            async with c.stream(
+                "POST",
+                f"{_AGENT_URL}/run",
+                json={
+                    "app_name": app_name,
+                    "user_id": user_id,
+                    "session_id": session_id,
+                    "new_message": {"role": "user", "parts": [{"text": prompt}]},
+                },
+                timeout=httpx.Timeout(connect=10.0, read=1200.0, write=10.0, pool=5.0),
+            ) as resp:
+                async for _ in resp.aiter_lines():
+                    pass  # drain stream — keeps agent alive until completion
+    except Exception as e:
+        msg = f"{type(e).__name__}: {e}" if str(e) else type(e).__name__
+        print(f"[DT webhook] Agent error problem={problem_id} session={session_id}: {msg}")
+    finally:
+        _active_dt_sessions.pop(problem_id, None)
+        for entry in _dt_trigger_log:
+            if entry["session_id"] == session_id:
+                entry["status"] = "done"
+                entry["finished_at"] = _now()
+
+
+@app.post("/webhook/dynatrace/problem")
+async def dynatrace_problem_webhook(request: Request, background_tasks: BackgroundTasks):
+    """Dynatrace Problem Notification webhook — auto-triggers the incident commander agent.
+
+    Configure in Dynatrace: Settings → Alerting → Problem Notifications → Webhook.
+    Set the URL to: {APPROVAL_SERVER_URL}/webhook/dynatrace/problem
+    Use the default JSON payload (no custom template needed).
+    """
+    body = await request.json()
+
+    state = body.get("state", "OPEN")
+    if state != "OPEN":
+        return {"status": "ignored", "reason": f"state={state}"}
+
+    # DT webhook field names vary across versions — check common variants
+    problem_id = (
+        body.get("ProblemID")
+        or body.get("problemId")
+        or body.get("problem_id")
+        or "unknown"
+    )
+
+    # Dedup — if this problem already has an active session, don't spin up another
+    if problem_id in _active_dt_sessions:
+        existing = _active_dt_sessions[problem_id]
+        return {"status": "already_running", "problem_id": problem_id, "session_id": existing}
+
+    session_id = str(uuid.uuid4())
+    _active_dt_sessions[problem_id] = session_id
+
+    _dt_trigger_log.append({
+        "problem_id": problem_id,
+        "session_id": session_id,
+        "triggered_at": _now(),
+        "status": "running",
+        "finished_at": None,
+    })
+    # Keep log bounded to last 10 triggers
+    if len(_dt_trigger_log) > 10:
+        _dt_trigger_log.pop(0)
+
+    background_tasks.add_task(_trigger_agent, session_id, problem_id)
+
+    print(f"[DT webhook] {problem_id} → agent session {session_id}")
+    return {"status": "triggered", "problem_id": problem_id, "session_id": session_id}
+
+
 @app.post("/webhook/vapi")
 async def vapi_webhook(request: Request):
     """Receive VAPI call events/webhooks.
@@ -293,6 +390,23 @@ async def vapi_webhook(request: Request):
 async def dashboard():
     pending = [v for v in _pending.values() if v["status"] == "pending"]
     all_requests = sorted(_pending.values(), key=lambda x: x["created_at"], reverse=True)
+
+    # Agent status banner — shown when a DT-triggered session is active
+    agent_banner = ""
+    running_sessions = [e for e in _dt_trigger_log if e["status"] == "running"]
+    if running_sessions:
+        latest = running_sessions[-1]
+        agent_banner = f"""
+        <div style="background:#1e3a5f;border:1px solid #3b82f6;border-radius:10px;padding:16px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;gap:12px">
+          <div style="display:flex;align-items:center;gap:12px">
+            <span style="font-size:22px">🤖</span>
+            <div>
+              <p style="font-weight:700;color:#93c5fd;margin:0">Agent Running — Auto-triggered by Dynatrace</p>
+              <p style="color:#64748b;font-size:13px;margin:4px 0 0">Problem {latest["problem_id"]} · Started {latest["triggered_at"][11:19]}Z · Session {latest["session_id"][:8]}…</p>
+            </div>
+          </div>
+          <a href="{_AGENT_URL}/dev-ui/" target="_blank" style="background:#1d4ed8;color:white;padding:8px 16px;border-radius:6px;font-size:13px;font-weight:600;text-decoration:none;white-space:nowrap">Open ADK Dashboard →</a>
+        </div>"""
 
     cards = ""
     for r in all_requests:
@@ -371,6 +485,7 @@ async def dashboard():
         <p style="font-size:11px;color:#475569;margin-top:2px" id="clock"></p>
       </div>
     </div>
+    {agent_banner}
     <div id="cards">{cards}</div>
   </div>
   <script>
