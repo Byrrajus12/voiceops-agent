@@ -352,6 +352,19 @@ def place_voice_call(
                 f.write(briefing_text)
             return {"status": "vapi_unavailable", "reason": "missing_credentials", "path": fallback_path}
 
+    # Check for a demo-time phone override on the approval server.
+    # This lets testers redirect calls to their own phone without changing env vars.
+    effective_number = to_number or VAPI_CALLER_NUMBER
+    try:
+        override_resp = requests.get(f"{APPROVAL_SERVER}/demo/phone", timeout=5)
+        if override_resp.status_code == 200:
+            override_number = override_resp.json().get("number", "")
+            if override_number:
+                print(f"[vapi] demo phone override active — calling {override_number}", flush=True)
+                effective_number = override_number
+    except Exception as e:
+        print(f"[vapi] could not fetch demo phone override: {e}", flush=True)
+
     headers = {
         "Authorization": f"Bearer {VAPI_API_KEY}",
         "Content-Type": "application/json",
@@ -365,7 +378,7 @@ def place_voice_call(
     payload = {
         "phoneNumberId": VAPI_PHONE_NUMBER_ID,
         "assistantId": VAPI_ASSISTANT_ID,
-        "customer": {"number": to_number or VAPI_CALLER_NUMBER},
+        "customer": {"number": effective_number},
         "assistantOverrides": {
             "firstMessage": "Hey, VoiceOps here.",
             # variableValues fills {{incident_context}} in the assistant's system prompt

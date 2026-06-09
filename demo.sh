@@ -60,6 +60,24 @@ cmd_status() {
 }
 
 cmd_break() {
+  # Parse optional --phone flag before the mode argument.
+  # Usage: ./demo.sh break [--phone +1xxxxxxxxxx] [mode]
+  local phone_override=""
+  local args=()
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --phone)
+        phone_override="$2"
+        shift 2
+        ;;
+      *)
+        args+=("$1")
+        shift
+        ;;
+    esac
+  done
+  set -- "${args[@]+"${args[@]}"}"
+
   local mode="${1:-crash}"
   local valid_modes="crash slow auth_error db_timeout dependency"
   if ! echo "$valid_modes" | grep -qw "$mode"; then
@@ -71,6 +89,17 @@ cmd_break() {
     echo "  db_timeout → HTTP 503 DB pool exhausted (AVAILABILITY)"
     echo "  dependency → HTTP 502 downstream unavailable (AVAILABILITY)"
     exit 1
+  fi
+
+  # ── Step 0: register phone override (if provided) ──────────────────────────
+  if [ -n "$phone_override" ]; then
+    log "\nStep 0 — Registering demo phone override..."
+    curl -s -X POST "$APPROVAL_URL/demo/phone" \
+      -H "Content-Type: application/json" \
+      -d "{\"number\": \"$phone_override\"}" | python3 -m json.tool 2>/dev/null || true
+    ok "Calls will be redirected to $phone_override"
+    echo "  (To clear: curl -X POST $APPROVAL_URL/demo/phone -H 'Content-Type: application/json' -d '{\"number\":\"\"}')"
+    echo ""
   fi
 
   # ── Step 1: commit the real broken code (crash) or a marker (other modes) ──
@@ -170,6 +199,23 @@ cmd_fix() {
 }
 
 cmd_demo() {
+  # Usage: ./demo.sh demo [--phone +1xxxxxxxxxx] [mode]
+  local phone_flag=""
+  local args=()
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --phone)
+        phone_flag="--phone $2"
+        shift 2
+        ;;
+      *)
+        args+=("$1")
+        shift
+        ;;
+    esac
+  done
+  set -- "${args[@]+"${args[@]}"}"
+
   log "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   log "  VoiceOps — Full Demo Flow"
   log "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -179,7 +225,8 @@ cmd_demo() {
   cmd_status
 
   log "Step 2 — Break the target service"
-  cmd_break "${1:-crash}"
+  # shellcheck disable=SC2086
+  cmd_break $phone_flag "${1:-crash}"
 
   echo ""
   log "Step 3 — Wait for Dynatrace to detect the incident"
@@ -351,8 +398,12 @@ cmd_help() {
   echo "Usage: ./demo.sh <command> [args]"
   echo ""
   echo "Demo commands:"
-  echo "  demo                   Full guided demo flow (break → wait → run agent)"
-  echo "  break [mode]           Break service on Cloud Run (modes: crash slow auth_error db_timeout dependency)"
+  echo "  demo [--phone +1xxxxxxxxxx] [mode]"
+  echo "                         Full guided demo flow (break → wait → run agent)"
+  echo "  break [--phone +1xxxxxxxxxx] [mode]"
+  echo "                         Break service on Cloud Run (modes: crash slow auth_error db_timeout dependency)"
+  echo "                         --phone redirects the VAPI call to your number for this demo run"
+  echo "                         To clear override: curl -X POST $APPROVAL_URL/demo/phone -d '{\"number\":\"\"}'"
   echo "  fix                    Set target service BROKEN=false on Cloud Run"
   echo "  approve <incident_id>  Approve a pending rollback via the approval server"
   echo "  reject  <incident_id>  Reject a pending rollback"
@@ -370,8 +421,8 @@ CMD="${1:-help}"
 shift || true
 
 case "$CMD" in
-  demo)    cmd_demo ;;
-  break)   cmd_break "${1:-crash}" ;;
+  demo)    cmd_demo "$@" ;;
+  break)   cmd_break "$@" ;;
   fix)     cmd_fix ;;
   status)  cmd_status ;;
   approve) cmd_approve "${1:-}" ;;

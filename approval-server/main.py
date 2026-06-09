@@ -15,6 +15,7 @@ _decisions: dict[str, dict] = {}
 _incident_state: dict[str, str] = {}  # incident_id → last known agent activity text
 _active_dt_sessions: dict[str, str] = {}  # problem_id → session_id (dedup guard)
 _dt_trigger_log: list[dict] = []  # recent DT webhook triggers for dashboard display
+_demo_phone_override: str = ""  # set at demo time to redirect calls to a tester's phone
 
 _AGENT_URL = os.getenv("AGENT_URL", "https://voiceops-agent-224808509436.us-central1.run.app")
 
@@ -118,6 +119,28 @@ async def list_all():
 @app.get("/health")
 async def health():
     return {"status": "ok", "pending_count": sum(1 for v in _pending.values() if v["status"] == "pending")}
+
+
+class DemoPhoneRequest(BaseModel):
+    number: str
+
+
+@app.post("/demo/phone", status_code=200)
+async def set_demo_phone(req: DemoPhoneRequest):
+    """Store a demo-time phone number override so test calls go to the tester's phone.
+
+    POST {"number": "+1xxxxxxxxxx"} to redirect all outbound VAPI calls.
+    POST {"number": ""} to clear the override and revert to VAPI_CALLER_NUMBER.
+    """
+    global _demo_phone_override
+    _demo_phone_override = req.number
+    return {"status": "ok", "number": _demo_phone_override}
+
+
+@app.get("/demo/phone")
+async def get_demo_phone():
+    """Return the current demo phone override (empty string if not set)."""
+    return {"number": _demo_phone_override}
 
 
 @app.post("/incident/{incident_id}/state")
