@@ -15,10 +15,6 @@ def start_session(body: dict) -> dict:
     Accepts requests from any authenticated client including synthetic monitors.
     session_id is optional — one is generated if not provided.
     """
-    # Security hardening: enforce webhook_secret on all session requests
-    if "webhook_secret" not in body or not body["webhook_secret"]:
-        raise ValueError("webhook_secret is required for all session start requests")
-
     session_id = body.get("session_id") or str(uuid.uuid4())
     _sessions[session_id] = {
         "session_id": session_id,
