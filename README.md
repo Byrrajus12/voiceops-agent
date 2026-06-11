@@ -70,20 +70,65 @@ Dynatrace Davis AI
 
 ---
 
-## Prerequisites
+---
 
-- Python 3.11+
-- A **Google Cloud project** with Vertex AI API enabled
-- A **Dynatrace** environment with the MCP Gateway enabled (`pmn*.apps.dynatrace.com`)
-- A **VAPI** account with an assistant and a phone number (Twilio as provider recommended for reliability)
-- A **GitHub** repository with `rollback.yml` committed (see `.github/workflows/rollback.yml`)
-- Application Default Credentials configured: `gcloud auth application-default login`
+## Testing
+
+Two ways to test VoiceOps: use our live deployment (no setup required), or run everything yourself.
 
 ---
 
-## Local Setup
+### Option A — Live deployment (no setup required)
 
-### 1. Clone and install
+All three services are running on Google Cloud Run. You only need a phone number.
+
+**Start a demo run — one command:**
+
+```bash
+curl -X POST https://voiceops-approval-224808509436.us-central1.run.app/demo/start \
+  -H "Content-Type: application/json" \
+  -d '{"phone": "+1YOURNUMBER"}'
+```
+
+This single call sets your phone, breaks the target service, and kicks off the flow. Dynatrace detects the failure in ~2-3 minutes and the agent calls you automatically.
+
+**When your phone rings:** say **"approve"** or press **1**. Stay on the line — the agent gives live updates as the rollback runs.
+
+**Monitor the run:**
+- Approval dashboard: https://voiceops-approval-224808509436.us-central1.run.app
+- ADK event stream: https://voiceops-agent-224808509436.us-central1.run.app/dev-ui/
+
+**Reset when done:**
+
+```bash
+curl -X POST https://voiceops-approval-224808509436.us-central1.run.app/demo/stop
+```
+
+---
+
+**Want to trigger manually via the ADK dashboard instead of auto-trigger?**
+
+Add `"manual": true`:
+
+```bash
+curl -X POST https://voiceops-approval-224808509436.us-central1.run.app/demo/start \
+  -H "Content-Type: application/json" \
+  -d '{"phone": "+1YOURNUMBER", "manual": true}'
+```
+
+Wait ~2-3 min for Dynatrace to detect the incident, then open the ADK dashboard, start a new session, and send:
+
+> `Check for active incidents and run the full incident response workflow.`
+
+The VAPI call, approval gate, and rollback run identically either way.
+
+---
+
+### Option B — Self-hosted
+
+Run VoiceOps against your own Dynatrace environment, GitHub repo, and VAPI account.
+
+**1. Clone and install**
 
 ```bash
 git clone https://github.com/Byrrajus12/voiceops-agent.git
@@ -91,88 +136,39 @@ cd voiceops-agent
 pip install -r requirements.txt
 ```
 
-### 2. Configure environment
+**2. Configure environment**
 
 ```bash
 cp .env.example .env
+# Fill in all values — see Environment Variables below
 ```
 
-Edit `.env` and fill in all values (see [Environment Variables](#environment-variables) below).
-
-### 3. Start the approval server
+**3. Start all services locally**
 
 ```bash
-uvicorn approval-server.main:app --port 8080
+./demo.sh local
+# Agent: http://localhost:8000 · Approval: http://localhost:8080 · Target: http://localhost:9000
 ```
 
-The approval dashboard is at http://localhost:8080.
-
-### 4. Start the agent
+**4. Break the target service**
 
 ```bash
-adk web agent
-```
-
-Open http://localhost:8000, select `incident_commander`, and send:
-
-> Check for active incidents and run the full incident response workflow.
-
----
-
-## Triggering an Incident (Demo)
-
-Use `demo.sh` to break the target service. `break crash` commits real broken code — a session handler that requires `webhook_secret` on every request — and deploys it to Cloud Run. The Dynatrace Synthetic Monitor gets HTTP 500 and Davis AI escalates to a problem within 2–3 minutes.
-
-```bash
-# Commit + deploy bad session_handler.py to Cloud Run
 ./demo.sh break crash
+# Or redirect calls to your phone at the same time:
+./demo.sh break --phone +1YOURNUMBER crash
+```
 
-# Davis AI problem fires in ~2-3 min. Then run the agent:
-# "Check for active incidents and run the full incident response workflow."
+**5. Wait ~2-3 min for Dynatrace, then run the agent**
 
-# After the agent completes the rollback, or to reset for the next run:
+Open http://localhost:8000 and send:
+
+> `Check for active incidents and run the full incident response workflow.`
+
+**6. Restore**
+
+```bash
 ./demo.sh fix
 ```
-
----
-
-## Testing / Judge Setup
-
-### Redirect the voice call to your own phone
-
-The agent calls the number in `VAPI_CALLER_NUMBER` by default. Override it per-run without changing config:
-
-```bash
-# Redirect calls to your number for this demo run
-./demo.sh break --phone +1YOURNUMBER crash
-
-# Or via the API directly (no gcloud needed):
-curl -X POST https://voiceops-approval-224808509436.us-central1.run.app/demo/phone \
-  -H "Content-Type: application/json" -d '{"number": "+1YOURNUMBER"}'
-
-# Clear when done
-curl -X POST https://voiceops-approval-224808509436.us-central1.run.app/demo/phone \
-  -H "Content-Type: application/json" -d '{"number": ""}'
-```
-
-### Test via the ADK dashboard (manual mode)
-
-By default, Dynatrace problem webhooks auto-start the agent. If you want to trigger it yourself via the ADK dashboard instead, enable manual mode first so the auto-trigger doesn't race you:
-
-```bash
-# Disable auto-trigger for your test run
-./demo.sh manual true
-# or: curl -X POST .../demo/manual -H 'Content-Type: application/json' -d '{"enabled": true}'
-
-# Trigger manually — open https://voiceops-agent-224808509436.us-central1.run.app/dev-ui/
-# Start a new session and send:
-# "Check for active incidents and run the full incident response workflow."
-
-# Re-enable auto-trigger when done
-./demo.sh manual false
-```
-
-Manual mode only affects the auto-trigger. Everything else (VAPI call, approval gate, rollback) runs exactly the same.
 
 ---
 

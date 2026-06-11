@@ -19,6 +19,8 @@ _demo_phone_override: str = ""  # set at demo time to redirect calls to a tester
 _manual_mode: bool = False      # when True, DT webhooks are received but agent is NOT auto-started
 
 _AGENT_URL = os.getenv("AGENT_URL", "https://voiceops-agent-224808509436.us-central1.run.app")
+_TARGET_URL = os.getenv("TARGET_SERVICE_URL", "https://voiceops-target-224808509436.us-central1.run.app")
+_APPROVAL_URL = os.getenv("APPROVAL_SERVER_URL", "https://voiceops-approval-224808509436.us-central1.run.app")
 
 
 class ApprovalRequest(BaseModel):
@@ -168,6 +170,85 @@ async def set_manual_mode(req: ManualModeRequest):
 async def get_manual_mode():
     """Return the current manual mode state."""
     return {"manual_mode": _manual_mode}
+
+
+class DemoStartRequest(BaseModel):
+    phone: str
+    manual: bool = False
+    mode: str = "crash"
+
+
+@app.post("/demo/start")
+async def demo_start(req: DemoStartRequest):
+    """One-call demo setup for testers and judges.
+
+    Sets your phone number, breaks the target service, and configures the trigger mode.
+    Dynatrace detects the failure in ~2-3 minutes, then either auto-starts the agent
+    or waits for you to trigger it manually via the ADK dashboard.
+
+    POST {"phone": "+1xxxxxxxxxx", "manual": false, "mode": "crash"}
+      phone  — required. The number that will receive the VAPI call.
+      manual — optional (default false). true = trigger via ADK dashboard; false = auto-trigger.
+      mode   — optional (default "crash"). One of: crash | slow | auth_error | db_timeout | dependency
+    """
+    global _demo_phone_override, _manual_mode
+
+    if not req.phone:
+        raise HTTPException(status_code=400, detail="phone is required")
+
+    _demo_phone_override = req.phone
+    _manual_mode = req.manual
+
+    async with httpx.AsyncClient(timeout=10.0) as c:
+        try:
+            await c.post(f"{_TARGET_URL}/demo/break", json={"mode": req.mode})
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"Could not reach target service: {e}")
+
+    if req.manual:
+        next_steps = [
+            "Wait 2-3 minutes for Dynatrace to detect the incident.",
+            f"Go to {_AGENT_URL}/dev-ui/ and start a new session.",
+            "Send: 'Check for active incidents and run the full incident response workflow.'",
+            f"You will receive a VAPI call on {req.phone}. Say 'approve' or press 1.",
+            f"Monitor the approval dashboard at {_APPROVAL_URL}/",
+            f"When done: POST {_APPROVAL_URL}/demo/stop",
+        ]
+    else:
+        next_steps = [
+            "Wait 2-3 minutes for Dynatrace to detect the incident.",
+            "The agent starts automatically when Dynatrace fires the webhook.",
+            f"You will receive a VAPI call on {req.phone}. Say 'approve' or press 1.",
+            f"Monitor the approval dashboard at {_APPROVAL_URL}/",
+            f"When done: POST {_APPROVAL_URL}/demo/stop",
+        ]
+
+    return {
+        "status": "demo_started",
+        "phone": req.phone,
+        "manual_mode": req.manual,
+        "failure_mode": req.mode,
+        "next_steps": next_steps,
+    }
+
+
+@app.post("/demo/stop")
+async def demo_stop():
+    """Reset everything after a demo run.
+
+    Clears the phone override, disables manual mode, and restores the target service.
+    """
+    global _demo_phone_override, _manual_mode
+    _demo_phone_override = ""
+    _manual_mode = False
+
+    async with httpx.AsyncClient(timeout=10.0) as c:
+        try:
+            await c.post(f"{_TARGET_URL}/demo/fix")
+        except Exception:
+            pass  # best-effort — don't block cleanup if target is unreachable
+
+    return {"status": "reset", "phone_override": "", "manual_mode": False}
 
 
 @app.post("/incident/{incident_id}/state")

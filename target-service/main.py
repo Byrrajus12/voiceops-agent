@@ -15,6 +15,12 @@ import session_handler
 BROKEN = os.getenv("BROKEN", "false").lower() == "true"
 FAILURE_MODE = os.getenv("FAILURE_MODE", "")
 
+# Runtime demo flags — changed via /demo/break and /demo/fix without redeploying
+_demo_broken: bool = False
+_demo_failure_mode: str = "crash"
+
+_VALID_MODES = ["crash", "slow", "auth_error", "db_timeout", "dependency"]
+
 DT_TOKEN = os.getenv("DYNATRACE_PLATFORM_TOKEN", "")
 DT_ENV_URL = os.getenv("DT_ENVIRONMENT_URL", "https://pmn17776.apps.dynatrace.com")
 DT_OTLP_ENDPOINT = f"{DT_ENV_URL.rstrip('/')}/api/v2/otlp/v1/traces"
@@ -35,11 +41,34 @@ FastAPIInstrumentor.instrument_app(app, tracer_provider=provider)
 
 @app.get("/health")
 async def health():
-    return {
-        "status": "degraded" if BROKEN else "ok",
-        "broken": BROKEN,
-        "failure_mode": FAILURE_MODE or None,
-    }
+    broken = BROKEN or _demo_broken
+    mode = _demo_failure_mode if _demo_broken else (FAILURE_MODE or None)
+    return {"status": "degraded" if broken else "ok", "broken": broken, "failure_mode": mode}
+
+
+@app.post("/demo/break")
+async def demo_break(request: Request):
+    """Runtime break — triggers failure mode in memory without redeploying.
+    Dynatrace Synthetic Monitor will detect HTTP 500s and fire a Davis AI problem in ~2-3 min.
+    POST {"mode": "crash"}  (modes: crash | slow | auth_error | db_timeout | dependency)
+    """
+    global _demo_broken, _demo_failure_mode
+    body = await request.json()
+    mode = body.get("mode", "crash")
+    if mode not in _VALID_MODES:
+        raise HTTPException(status_code=400, detail=f"mode must be one of: {_VALID_MODES}")
+    _demo_broken = True
+    _demo_failure_mode = mode
+    return {"status": "broken", "mode": _demo_failure_mode}
+
+
+@app.post("/demo/fix")
+async def demo_fix():
+    """Runtime fix — clears the in-memory failure mode."""
+    global _demo_broken, _demo_failure_mode
+    _demo_broken = False
+    _demo_failure_mode = "crash"
+    return {"status": "healthy"}
 
 
 @app.post("/voice-agent/session/start")
@@ -48,8 +77,21 @@ async def session_start(request: Request):
     with tracer.start_as_current_span("voice-agent.session.start") as span:
         span.set_attribute("session_id", body.get("session_id", "unknown"))
 
+        # Runtime demo break takes precedence over env vars
+        active_broken = BROKEN or _demo_broken
+        active_mode = _demo_failure_mode if _demo_broken else FAILURE_MODE
+
+        if _demo_broken and active_mode == "crash":
+            span.set_attribute("error", True)
+            span.set_attribute("error.type", "ValueError")
+            raise HTTPException(status_code=500, detail={
+                "error": "InternalServerError",
+                "message": "webhook_secret is required for session authentication",
+                "code": "SESSION_START_FAILED",
+            })
+
         # Non-crash env-var-based failure modes for demo variety
-        if BROKEN and FAILURE_MODE == "slow":
+        if active_broken and active_mode == "slow":
             delay = random.uniform(8.0, 15.0)
             span.set_attribute("error", True)
             span.set_attribute("error.type", "RequestTimeout")
@@ -60,7 +102,7 @@ async def session_start(request: Request):
                 "code": "UPSTREAM_TIMEOUT",
             })
 
-        if BROKEN and FAILURE_MODE == "auth_error":
+        if active_broken and active_mode == "auth_error":
             span.set_attribute("error", True)
             span.set_attribute("error.type", "AuthenticationError")
             raise HTTPException(status_code=401, detail={
@@ -69,7 +111,7 @@ async def session_start(request: Request):
                 "code": "INVALID_TOKEN",
             })
 
-        if BROKEN and FAILURE_MODE == "db_timeout":
+        if active_broken and active_mode == "db_timeout":
             span.set_attribute("error", True)
             span.set_attribute("error.type", "DatabaseConnectionError")
             raise HTTPException(status_code=503, detail={
@@ -83,7 +125,7 @@ async def session_start(request: Request):
                 ),
             })
 
-        if BROKEN and FAILURE_MODE == "dependency":
+        if active_broken and active_mode == "dependency":
             span.set_attribute("error", True)
             span.set_attribute("error.type", "DependencyUnavailable")
             raise HTTPException(status_code=502, detail={
