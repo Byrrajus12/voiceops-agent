@@ -39,7 +39,7 @@ Dynatrace Davis AI
       ▼
 ┌──────────────────────────────────────────────┐
 │         VoiceOps Incident Commander          │
-│     Google ADK · Gemini 2.5 Flash · GCP      │
+│     Google ADK · Gemini 3.5 Flash · GCP      │
 │                                              │
 │  Phase 1 — Triage & Mitigate                 │
 │    query_problems + get_problem_by_id        │
