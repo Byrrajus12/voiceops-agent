@@ -16,6 +16,7 @@ _incident_state: dict[str, str] = {}  # incident_id → last known agent activit
 _active_dt_sessions: dict[str, str] = {}  # problem_id → session_id (dedup guard)
 _dt_trigger_log: list[dict] = []  # recent DT webhook triggers for dashboard display
 _demo_phone_override: str = ""  # set at demo time to redirect calls to a tester's phone
+_manual_mode: bool = False      # when True, DT webhooks are received but agent is NOT auto-started
 
 _AGENT_URL = os.getenv("AGENT_URL", "https://voiceops-agent-224808509436.us-central1.run.app")
 
@@ -141,6 +142,32 @@ async def set_demo_phone(req: DemoPhoneRequest):
 async def get_demo_phone():
     """Return the current demo phone override (empty string if not set)."""
     return {"number": _demo_phone_override}
+
+
+class ManualModeRequest(BaseModel):
+    enabled: bool
+
+
+@app.post("/demo/manual", status_code=200)
+async def set_manual_mode(req: ManualModeRequest):
+    """Toggle manual mode.
+
+    When enabled, Dynatrace problem webhooks are received and logged but the agent
+    is NOT auto-started. Use this when you want to trigger the agent manually via the
+    ADK dashboard without the auto-trigger racing you.
+
+    POST {"enabled": true}  — disable auto-trigger
+    POST {"enabled": false} — re-enable auto-trigger (default)
+    """
+    global _manual_mode
+    _manual_mode = req.enabled
+    return {"status": "ok", "manual_mode": _manual_mode}
+
+
+@app.get("/demo/manual")
+async def get_manual_mode():
+    """Return the current manual mode state."""
+    return {"manual_mode": _manual_mode}
 
 
 @app.post("/incident/{incident_id}/state")
@@ -321,6 +348,12 @@ async def dynatrace_problem_webhook(request: Request, background_tasks: Backgrou
         or body.get("problem_id")
         or "unknown"
     )
+
+    # Manual mode — log the webhook but don't auto-start the agent
+    if _manual_mode:
+        print(f"[DT webhook] manual_mode=True — received problem {problem_id}, not auto-starting agent")
+        return {"status": "received", "manual_mode": True, "problem_id": problem_id,
+                "note": "Manual mode enabled. Trigger the agent via the ADK dashboard."}
 
     # Dedup — if this problem already has an active session, don't spin up another
     if problem_id in _active_dt_sessions:

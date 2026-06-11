@@ -7,6 +7,7 @@ load_dotenv()
 
 from google.adk.agents import Agent  # noqa: E402
 from google.adk.tools.mcp_tool.mcp_toolset import McpToolset, StreamableHTTPConnectionParams  # noqa: E402
+from google.genai import types  # noqa: E402
 
 from agent.tools import (  # noqa: E402
     close_github_issue,
@@ -54,6 +55,11 @@ dynatrace_mcp = McpToolset(
 root_agent = Agent(
     name="incident_commander",
     model=GEMINI_MODEL,
+    generate_content_config=types.GenerateContentConfig(
+        http_options=types.HttpOptions(
+            retry_options=types.HttpRetryOptions(initial_delay=15, attempts=3),
+        ),
+    ),
     description=(
         "VoiceOps — Autonomous Incident Commander powered by Google ADK and Dynatrace MCP. "
         "Detects production incidents via Dynatrace Davis AI, correlates them with GitHub commits, "
@@ -111,12 +117,8 @@ Branch on confidence:
 BEFORE placing any call — reset the incident state so VAPI doesn't see stale data from a prior session:
   Call update_incident_state(incident_id=<display_id>, state="Triage in progress — suspect commit identified. Preparing to brief operator.").
 
-HIGH → Call place_voice_call with briefing_text=<context string>, incident_id=<display_id>.
-       No phone number — it is configured server-side.
-       Save the call_id from the result (result["call_id"]) — you will need it for send_voice_update.
-       Go directly to trigger_github_rollback(commit_sha=<BAD_SHA>) after the call.
-
-MEDIUM/LOW → Create the approval FIRST so the voice webhook can resolve it:
+HIGH/MEDIUM/LOW → Always go through the approval gate (required for demo and safe operation):
+  Create the approval FIRST so the voice webhook can resolve it:
   1. Call request_human_approval(incident_id, action="rollback (auto-resolves safe parent of <BAD_SHA>)", summary, risk_level="high", confidence=<level>).
      Save the returned approval_id.
   2. Call place_voice_call with briefing_text=<context string>, incident_id=<display_id>, approval_id=<approval_id>.

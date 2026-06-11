@@ -1,6 +1,6 @@
 # VoiceOps — Autonomous Incident Commander
 
-An AI agent built on **Google ADK + Gemini 2.5 Flash** that autonomously detects production incidents via **Dynatrace Davis AI**, correlates them with GitHub commits, places a live outbound call via **VAPI**, gates rollback on confidence (auto for HIGH, human approval for MEDIUM/LOW), triggers a **GitHub Actions rollback**, then runs a full post-incident RCA — all in one closed loop.
+An AI agent built on **Google ADK + Gemini 3.5 Flash** that autonomously detects production incidents via **Dynatrace Davis AI**, correlates them with GitHub commits, places a live outbound call via **VAPI**, gates every rollback on human approval (phone or dashboard), triggers a **GitHub Actions rollback**, then runs a full post-incident RCA — all in one closed loop.
 
 > Built for the Google Cloud Rapid Agent Hackathon 2026 · Dynatrace Track
 
@@ -24,7 +24,7 @@ The agent runs in two phases:
 1. Queries Dynatrace Davis AI for open problems
 2. Fetches recent GitHub commits, finds any deployed within 60 min of incident start → confidence score
 3. Places a live VAPI outbound call; pushes proactive status updates to the active call at each milestone via VAPI Live Call Control — operator stays informed without having to ask
-4. HIGH confidence → triggers rollback automatically; MEDIUM/LOW → creates approval request first, places call with `approval_id` in metadata so saying "approve" resolves it directly via VAPI server-side tool; also available via browser dashboard
+4. Creates an approval request, places the call with `approval_id` in metadata — operator approves verbally or by keypad; also available via browser dashboard. Every rollback requires explicit human sign-off regardless of confidence level.
 5. Polls GitHub Actions until rollback completes, then re-checks Dynatrace to confirm problem closed
 
 **Phase 2 — Post-Incident** (only after service is restored)
@@ -136,6 +136,46 @@ Use `demo.sh` to break the target service. `break crash` commits real broken cod
 
 ---
 
+## Testing / Judge Setup
+
+### Redirect the voice call to your own phone
+
+The agent calls the number in `VAPI_CALLER_NUMBER` by default. Override it per-run without changing config:
+
+```bash
+# Redirect calls to your number for this demo run
+./demo.sh break --phone +1YOURNUMBER crash
+
+# Or via the API directly (no gcloud needed):
+curl -X POST https://voiceops-approval-224808509436.us-central1.run.app/demo/phone \
+  -H "Content-Type: application/json" -d '{"number": "+1YOURNUMBER"}'
+
+# Clear when done
+curl -X POST https://voiceops-approval-224808509436.us-central1.run.app/demo/phone \
+  -H "Content-Type: application/json" -d '{"number": ""}'
+```
+
+### Test via the ADK dashboard (manual mode)
+
+By default, Dynatrace problem webhooks auto-start the agent. If you want to trigger it yourself via the ADK dashboard instead, enable manual mode first so the auto-trigger doesn't race you:
+
+```bash
+# Disable auto-trigger for your test run
+./demo.sh manual true
+# or: curl -X POST .../demo/manual -H 'Content-Type: application/json' -d '{"enabled": true}'
+
+# Trigger manually — open https://voiceops-agent-224808509436.us-central1.run.app/dev-ui/
+# Start a new session and send:
+# "Check for active incidents and run the full incident response workflow."
+
+# Re-enable auto-trigger when done
+./demo.sh manual false
+```
+
+Manual mode only affects the auto-trigger. Everything else (VAPI call, approval gate, rollback) runs exactly the same.
+
+---
+
 ## Approving / Rejecting a Rollback
 
 When the agent hits MEDIUM or LOW confidence, it creates an approval request then places a VAPI phone call with the `approval_id` embedded in call metadata. You have four ways to respond:
@@ -180,7 +220,7 @@ Copy `.env.example` to `.env` and fill in:
 | `VAPI_WEBHOOK_URL` | URL of the VAPI webhook endpoint on the approval server |
 | `APPROVAL_SERVER_URL` | Base URL of the approval server |
 | `TARGET_SERVICE_URL` | Base URL of the service being monitored |
-| `GEMINI_MODEL` | Model ID, default `gemini-2.5-flash` |
+| `GEMINI_MODEL` | Model ID, default `gemini-3.5-flash` |
 
 ### Dynatrace Platform Token scopes
 
@@ -264,7 +304,7 @@ voiceops-agent/
 | Layer | Technology |
 |-------|-----------|
 | Agent framework | Google ADK 2.2.0 |
-| LLM | Gemini 2.5 Flash via Vertex AI (`locations/global`) |
+| LLM | Gemini 3.5 Flash via Vertex AI (`locations/global`) |
 | Observability | Dynatrace MCP Gateway + Davis AI |
 | Voice | VAPI — outbound phone calls (Twilio as provider) |
 | Source control | GitHub REST API + GitHub Actions |

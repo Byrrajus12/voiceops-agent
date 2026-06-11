@@ -329,6 +329,24 @@ cmd_local() {
   wait
 }
 
+cmd_manual() {
+  local enabled="${1:-true}"
+  if [[ "$enabled" != "true" && "$enabled" != "false" ]]; then
+    err "Usage: ./demo.sh manual [true|false]"
+    exit 1
+  fi
+  log "\nSetting manual mode: $enabled ..."
+  curl -s -X POST "$APPROVAL_URL/demo/manual" \
+    -H "Content-Type: application/json" \
+    -d "{\"enabled\": $enabled}" | python3 -m json.tool 2>/dev/null || true
+  if [ "$enabled" = "true" ]; then
+    ok "Manual mode ON — Dynatrace webhooks received but agent NOT auto-started."
+    info "Trigger manually: go to $AGENT_URL/dev-ui/ and send the incident prompt."
+  else
+    ok "Manual mode OFF — Dynatrace webhooks will auto-start the agent."
+  fi
+}
+
 cmd_logs() {
   local svc="${1:-$AGENT_SVC}"
   log "\nStreaming logs for $svc ..."
@@ -404,7 +422,8 @@ cmd_help() {
   echo "                         Break service on Cloud Run (modes: crash slow auth_error db_timeout dependency)"
   echo "                         --phone redirects the VAPI call to your number for this demo run"
   echo "                         To clear override: curl -X POST $APPROVAL_URL/demo/phone -d '{\"number\":\"\"}'"
-  echo "  fix                    Set target service BROKEN=false on Cloud Run"
+  echo "  fix                    Restore target service to healthy state
+  manual [true|false]    Disable/enable Dynatrace auto-trigger (use true to test via ADK dashboard manually)"
   echo "  approve <incident_id>  Approve a pending rollback via the approval server"
   echo "  reject  <incident_id>  Reject a pending rollback"
   echo ""
@@ -427,6 +446,7 @@ case "$CMD" in
   status)  cmd_status ;;
   approve) cmd_approve "${1:-}" ;;
   reject)  cmd_reject "${1:-}" ;;
+  manual)  cmd_manual "${1:-true}" ;;
   local)   cmd_local ;;
   logs)    cmd_logs "${1:-}" ;;
   deploy)  cmd_deploy "${1:-all}" ;;

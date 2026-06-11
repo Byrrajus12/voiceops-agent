@@ -31,9 +31,21 @@ application_default_credentials.json
 # Session test data (may contain personal info)
 agent/test-data/
 
+# ADK local session cache
+agent/.adk/
+
+# Impeccable plugin cache
+.impeccable/
+
+# Demo data (audio + session recordings — not source code)
+demo/*.json
+demo/*.wav
+
 # Local-only planning/notes
 voice-layer-brainstorm.md
 HACKATHON_PLAN.md
+PRODUCT.md
+PROGRESS.md
 
 # Audio output
 *.mp3

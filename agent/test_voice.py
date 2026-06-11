@@ -38,6 +38,14 @@ async def test() -> None:
         if pending_response.status_code not in (200, 201):
             raise RuntimeError(f"Approval request failed: {pending_response.status_code} {pending_response.text}")
 
+        # Realistic incident context — same format the ADK agent passes at call time.
+        # Edit this to match a real problem if you have one open in Dynatrace.
+        test_incident_context = (
+            "Incident P-99999 — HIGH severity on checkout-service since 02:46 UTC. "
+            "Suspect commit: abc123def456 by sai, 4 min before incident. Confidence: HIGH. "
+            "Rolling back to safe parent commit."
+        )
+
         call_response = await client.post(
             "https://api.vapi.ai/call/phone",
             headers={
@@ -49,10 +57,8 @@ async def test() -> None:
                 "assistantId": os.getenv("VAPI_ASSISTANT_ID"),
                 "customer": {"number": operator_number},
                 "assistantOverrides": {
-                    "firstMessage": (
-                        "This is VoiceOps. Production is down. "
-                        "Please say approve rollback, reject, investigate more, or snooze for fifteen minutes."
-                    ),
+                    "firstMessage": "Hey, VoiceOps here.",
+                    "variableValues": {"incident_context": test_incident_context},
                 },
                 "metadata": {"incident_id": incident_id},
             },
